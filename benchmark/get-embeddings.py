@@ -26,7 +26,7 @@ layer=int(sys.argv[6])
 
 name=input_seq.split('/')[-1].split('.')[0]
 output_file=output_dir+'/'+name+f"-embedding-layer_{layer}.npy"
-model_dir="./models"
+model_dir="./benchmark_models"
 batch_size=4
 if os.path.exists(output_file) and  os.path.getsize(output_file) != 0:
     sys.exit()
@@ -35,7 +35,6 @@ class Caduceus_GFM_Dataset(Dataset):
     def __init__(self, sequence_path,model_name,embedding_len):
         super(Caduceus_GFM_Dataset, self).__init__()
         self.DNA_input_seq = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        # self.DNA_input_seq = np.load(DNA_data_path,allow_pickle=True)
         self.model_name=model_name
         self.embedding_len=embedding_len
         self.num_DNA=self.DNA_input_seq.shape[0]
@@ -54,7 +53,6 @@ class HyenaDNA_GFM_Dataset(Dataset):
     def __init__(self, sequence_path,model_name,embedding_len):
         super(HyenaDNA_GFM_Dataset, self).__init__()
         self.DNA_input_seq = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        # self.DNA_input_seq = np.load(DNA_data_path,allow_pickle=True)
         self.model_name=model_name
         self.embedding_len=embedding_len
         self.num_DNA=self.DNA_input_seq.shape[0]
@@ -62,7 +60,6 @@ class HyenaDNA_GFM_Dataset(Dataset):
     def tokenize(self, seq):
         token_result=self.pre_tokenizer(seq, return_tensors = 'pt',padding='max_length',max_length=self.embedding_len+1)
         new_dict={key:token_result[key].squeeze(0) for key in token_result}
-        # input_ids=token_result["input_ids"].squeeze(0)
         return new_dict
     def __len__(self):
         return int(self.num_DNA)
@@ -93,7 +90,6 @@ class GROVER_GFM_Dataset(Dataset):
     def __init__(self, sequence_path,model_name,embedding_len):
         super(GROVER_GFM_Dataset, self).__init__()
         self.DNA_input_seq = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        # self.DNA_input_seq = np.load(DNA_data_path,allow_pickle=True)
         self.model_name=model_name
         self.embedding_len=embedding_len
         self.num_DNA=self.DNA_input_seq.shape[0]
@@ -101,7 +97,6 @@ class GROVER_GFM_Dataset(Dataset):
     def tokenize(self, seq):
         token_result=self.pre_tokenizer(seq, return_tensors = 'pt',padding="max_length",max_length=self.embedding_len+1)
         new_dict={key:token_result[key].squeeze(0) for key in token_result}
-        # input_ids=token_result["input_ids"].squeeze(0)
         return new_dict
     def __len__(self):
         return int(self.num_DNA)
@@ -140,7 +135,6 @@ def load_finetune_dataset(file_dir,embedding_len):
                 seq = seq[0:max_position_embeddings-2]
             seqs.append(seq)
             seq_max_len = max(seq_max_len, seq.shape[0])
-            # dataset.labels.append(torch.tensor(int(line[1]), dtype=torch.long))
     seq_max_len += 2
     for x in seqs:
         num_nodes = x.shape[0]
@@ -162,7 +156,6 @@ def load_finetune_dataset(file_dir,embedding_len):
                  'attention_mask': attention_mask.cpu(),
                  'pos_ids': pos_ids.cpu()}
         dataset.graphs.append(graph)
-    # print(dataset.graphs)
     return dataset
 
 
@@ -411,6 +404,186 @@ class NT_GFM_Dataset(Dataset):
         return DNA_input_ids
 
 
+if model_type=='Random_baseline':
+    if model_name=='RandomWeight':
+        import os
+        import sys
+        sys.path.append("../pretrain_downstream_alignment/BERT-155M-Series")
+        import torch
+        from torch.utils.data import DataLoader
+        import numpy as np
+        from dpb_bert.data import  DNADataset, DNATokenizer
+        from dpb_bert.model import DNALingo
+        model_checkpoint = f"../pretrain_downstream_alignment/BERT-155M-Series/RandomWeights/model_init_666.pt"
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"Using {device} device")
+        '''model parameters'''
+        d_kv = 64 # dimension of K(=Q), V
+        n_heads = 16 # number of heads in Multi-Head Attention
+        n_layers = 12 # number of Encoder of Encoder Layer
+        max_vocab = 16
+        d_model = n_heads * d_kv
+        '''tokenization'''
+        kmer = 1
+        '''training config'''
+
+        def load_model():
+            # init model
+            print("Initializing model and loading checkpoint...")
+
+            model = DNALingo(max_vocab, n_heads, d_kv, n_layers, eval_mode=True)
+            model.to(device)
+            
+            # loading checkpoint
+            checkpoint = torch.load(model_checkpoint, map_location=device)
+            state_dict = checkpoint['model_state_dict']
+            
+            # remove unused keys
+            model_state = model.state_dict()
+            state_dict = {k: v for k, v in state_dict.items() if k in model_state}
+            model_state.update(state_dict)
+            model.load_state_dict(model_state)
+            
+            return model
+        model = load_model()
+        print(model)
+        seq_path=input_seq
+        out_path=output_file
+        layer_num = -1
+        mean_mode = False
+        # get seq number
+        input_seq = np.loadtxt(seq_path, dtype=str, delimiter="\t")
+        seq_num = input_seq.shape[0]
+        print(seq_num)
+        # load data
+        dna_tokenizer = DNATokenizer(kmer = kmer)
+        # default: no padding
+        seq_dataset = DNADataset(dna_tokenizer, seq_path, data_type="seq")
+        seq_data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+        
+        # placeholder for output embedding
+        if mean_mode:
+            output_embedding = np.empty((seq_num, d_model))
+            # output_embedding = open_memmap(
+            #         output_file,
+            #         dtype=np.float32,
+            #         mode="w+",  # 覆盖写入
+            #         shape=(seq_num, d_model))
+        else:
+            output_embedding = np.empty((seq_num, embedding_len, d_model))
+            # output_embedding = open_memmap(
+            #         output_file,
+            #         dtype=np.float32,
+            #         mode="w+",  # 覆盖写入
+            #         shape=(seq_num, embedding_len, d_model))
+        # predict
+        print("Extracting embedding...")
+        model.eval().cuda()
+        # flash attention only support fp16 and bf16
+        with torch.autocast(device_type='cuda',dtype=torch.bfloat16):
+            with torch.no_grad():
+                for x, input_ids in enumerate(seq_data_loader):
+                    embedding = model(input_ids[0].cuda())
+                    if mean_mode:
+                        # cal mean embedding, exclude CLS and SEP
+                        embedding_mean = torch.mean(embedding[layer_num][:,1:1+embedding_len,:], dim=1)
+                        output_embedding[x*batch_size : x*batch_size + embedding_mean.shape[0]] = embedding_mean.cpu().detach().numpy().astype(np.float32)
+                    else:
+                        # exclude CLS and SEP
+                        output_embedding[x*batch_size : x*batch_size + embedding[layer_num].shape[0]] = embedding[layer_num][:,1:1+embedding_len,:].cpu().detach().numpy().astype(np.float32)
+        # print(output_embedding)
+        # output_embedding.flush()
+        result=output_embedding
+    if model_name=='RandomSeq':
+        import os
+        import sys
+        sys.path.append("../pretrain_downstream_alignment/BERT-155M-Series")
+        import torch
+        from torch.utils.data import DataLoader
+        import numpy as np
+        from dpb_bert.data import  DNADataset, DNATokenizer
+        from dpb_bert.model import DNALingo
+        # model_dir="/lustre/grp/gglab/liangyx/data/benchmark/MS7-4K-8-K1"
+        # model_version=find_files_with_prefix(model_dir,f"model_{epoch}_")[0]
+        model_checkpoint = f"../pretrain_downstream_alignment/RandomSeq/model_0_43637.pt"
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"Using {device} device")
+        '''model parameters'''
+        d_kv = 64 # dimension of K(=Q), V
+        n_heads = 16 # number of heads in Multi-Head Attention
+        n_layers = 12 # number of Encoder of Encoder Layer
+        max_vocab = 16
+        d_model = n_heads * d_kv
+        '''tokenization'''
+        kmer = 1
+        '''training config'''
+
+        def load_model():
+            # init model
+            print("Initializing model and loading checkpoint...")
+
+            model = DNALingo(max_vocab, n_heads, d_kv, n_layers, eval_mode=True)
+            model.to(device)
+            
+            # loading checkpoint
+            checkpoint = torch.load(model_checkpoint, map_location=device)
+            state_dict = checkpoint['model_state_dict']
+            
+            # remove unused keys
+            model_state = model.state_dict()
+            state_dict = {k: v for k, v in state_dict.items() if k in model_state}
+            model_state.update(state_dict)
+            model.load_state_dict(model_state)
+            
+            return model
+        model = load_model()
+        print(model)
+        seq_path=input_seq
+        out_path=output_file
+        layer_num = -1
+        mean_mode = False
+        # get seq number
+        input_seq = np.loadtxt(seq_path, dtype=str, delimiter="\t")
+        seq_num = input_seq.shape[0]
+        print(seq_num)
+        # load data
+        dna_tokenizer = DNATokenizer(kmer = kmer)
+        # default: no padding
+        seq_dataset = DNADataset(dna_tokenizer, seq_path, data_type="seq")
+        seq_data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+        
+        # placeholder for output embedding
+        if mean_mode:
+            output_embedding = np.empty((seq_num, d_model))
+            # output_embedding = open_memmap(
+            #         output_file,
+            #         dtype=np.float32,
+            #         mode="w+",  # 覆盖写入
+            #         shape=(seq_num, d_model))
+        else:
+            output_embedding = np.empty((seq_num, embedding_len, d_model))
+            # output_embedding = open_memmap(
+            #         output_file,
+            #         dtype=np.float32,
+            #         mode="w+",  # 覆盖写入
+            #         shape=(seq_num, embedding_len, d_model))
+        # predict
+        print("Extracting embedding...")
+        model.eval().cuda()
+        # flash attention only support fp16 and bf16
+        with torch.autocast(device_type='cuda',dtype=torch.bfloat16):
+            with torch.no_grad():
+                for x, input_ids in enumerate(seq_data_loader):
+                    embedding = model(input_ids[0].cuda())
+                    if mean_mode:
+                        # cal mean embedding, exclude CLS and SEP
+                        embedding_mean = torch.mean(embedding[layer_num][:,1:1+embedding_len,:], dim=1)
+                        output_embedding[x*batch_size : x*batch_size + embedding_mean.shape[0]] = embedding_mean.cpu().detach().numpy().astype(np.float32)
+                    else:
+                        # exclude CLS and SEP
+                        output_embedding[x*batch_size : x*batch_size + embedding[layer_num].shape[0]] = embedding[layer_num][:,1:1+embedding_len,:].cpu().detach().numpy().astype(np.float32)
+        # print(output_embedding)
+        result=output_embedding
 
 
 if model_type=="dnabert2":
@@ -644,7 +817,41 @@ if model_type=='deepgene':
                     # print(end-start)
         return embedding_result
     result=get_embedding(deepgene_dataloader,model,layer)
+if model_type=="dnabert":
+    model=AutoModel.from_pretrained(f"{model_dir}/{model_name}")
+    model=model.to(device)
+    model=model.eval()
+    tokenizer=AutoTokenizer.from_pretrained(f"{model_dir}/{model_name}")
+    k_mers=int(model_name.split('_')[-1])
+    print("model loaded")
+    dnabert_dataset=DNABERT_GFM_Dataset(DNA_data_path=input_seq,k_mers=k_mers,pre_tokenizer=tokenizer,embedding_len=embedding_len)
+    dnabert_dataloader = DataLoader(dnabert_dataset, batch_size=batch_size)
+    def get_embedding(dataloader,model,layer=-1):
+        test_flag=True
+        cnt=0
+        with torch.no_grad():
+            for batch in dataloader:
+                batch={key:value.to(device) for key,value in batch.items()}
+                if test_flag:
+                    print(batch['input_ids'].shape)
+                    out=model(**batch,output_hidden_states=True)['hidden_states'][layer]
+                    print(out.shape)
+                    temp=model(**batch,output_hidden_states=True)['hidden_states'][layer][:,1:-1,:]
+                    temp=temp.cpu().detach().numpy()
+                    num=temp.shape[0]
+                    embedding_result=np.zeros((len(dataloader.dataset),temp.shape[1],temp.shape[2]))
+                    embedding_result[cnt:cnt+num,:,:]=temp
+                    cnt+=num
+                    test_flag=False
+                else:
+                    temp=model(**batch,output_hidden_states=True)['hidden_states'][layer][:,1:-1,:]
+                    temp=temp.cpu().detach().numpy()
+                    num=temp.shape[0]
+                    embedding_result[cnt:cnt+num,:,:]=temp
+                    cnt+=num
 
+        return embedding_result
+    result=get_embedding(dnabert_dataloader,model,layer)
 if model_type=='lucaone':
     from transformers import AutoTokenizer, PretrainedConfig, BertTokenizer
     from collections import OrderedDict
