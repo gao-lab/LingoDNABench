@@ -34,23 +34,18 @@ import numpy as np
 from scipy.interpolate import splev
 
 
-task_name=sys.argv[1]
-model_name=sys.argv[2]
-data_dir=sys.argv[3]
-layer=int(sys.argv[4])
-random_seed=int(sys.argv[5])
-output_dim=int(sys.argv[6])
+model_name=sys.argv[1]
+data_dir=sys.argv[2]
+layer=int(sys.argv[3])
+random_seed=int(sys.argv[4])
+output_dim=int(sys.argv[5])
 
-regression=sys.argv[7]
+regression=sys.argv[6]
 if regression=="True":
     regression=True
 else:
     regression=False
-multi_seq=sys.argv[8]
-if multi_seq=="True":
-    multi_seq=True
-else:
-    multi_seq=False
+
 save_dir=f"{data_dir}/{model_name}/checkpoint"
 if os.path.exists(save_dir):
     pass
@@ -284,7 +279,6 @@ class SplineWeight1D(nn.Module):
 class Double_input_model(nn.Module):
     def __init__(self,in_channels):
         super(Double_input_model, self).__init__()
-        #参照原工作
         self.conv1=nn.Conv1d(in_channels,256,1)
         self.conv2=nn.Conv1d(256,256,9,padding='same')
         self.batchnorm1=nn.BatchNorm1d(256)
@@ -299,33 +293,24 @@ class Double_input_model(nn.Module):
         self.batchnorm4=nn.BatchNorm1d(64)
         self.drop=nn.Dropout(0.2)
         self.linear2=nn.Linear(in_features=64,out_features=output_dim)
-        # self.linear3=nn.Linear(in_features=256,out_features=output_dim)
         
     def forward(self,x1,x2):
         x1=x1.permute(0,2,1)
         x2=x2.permute(0,2,1)
         x1=self.conv1(x1)
         x1=self.conv2(x1)
-        # print(x1.shape)
         x2=self.conv1(x2)
         x2=self.conv2(x2)
         #convolutions
         x1=self.act(self.batchnorm1(x1))
         x2=self.act(self.batchnorm2(x2))
-        # print(x2.shape)
         x1=self.sp_model1(x1.permute(0,2,1))
-        
         x2=self.sp_model2(x2.permute(0,2,1))
-        # print(x2.shape)
         x=torch.cat([x1.permute(0,2,1),x2.permute(0,2,1)],dim=2)
-        # print(x.shape)
-        # print(x.shape)
         #pooling
         x=torch.nn.functional.avg_pool1d(x,kernel_size=x.shape[2])
         x=x.view(x.shape[0],-1)
-        # print(x.shape)
         x=self.batchnorm3(x)
-        
         x=self.linear1(x)
         x=self.act(x)
         x=self.batchnorm4(x)
@@ -336,94 +321,93 @@ class Double_input_model(nn.Module):
         return x
 
     
-exon=True
-if exon:
-    train_label=np.load(data_dir+'/train_target.npy')
-    valid_label=np.load(data_dir+'/dev_target.npy')
-    test_label=np.load(data_dir+'/test_target.npy')
-    train_label=torch.as_tensor(train_label)
-    valid_label=torch.as_tensor(valid_label)
-    test_label=torch.as_tensor(test_label)
 
-    train_data_1=np.load(f"{data_dir}/{model_name}/train_data_0-embedding-layer_{layer}.npy")
-    valid_data_1=np.load(f"{data_dir}/{model_name}/dev_data_0-embedding-layer_{layer}.npy")
-    test_data_1=np.load(f"{data_dir}/{model_name}/test_data_0-embedding-layer_{layer}.npy")
-    train_data_1=torch.as_tensor(train_data_1)
-    valid_data_1=torch.as_tensor(valid_data_1)
-    test_data_1=torch.as_tensor(test_data_1)
+train_label=np.load(data_dir+'/train_target.npy')
+valid_label=np.load(data_dir+'/dev_target.npy')
+test_label=np.load(data_dir+'/test_target.npy')
+train_label=torch.as_tensor(train_label)
+valid_label=torch.as_tensor(valid_label)
+test_label=torch.as_tensor(test_label)
 
-    train_data_2=np.load(f"{data_dir}/{model_name}/train_data_1-embedding-layer_{layer}.npy")
-    valid_data_2=np.load(f"{data_dir}/{model_name}/dev_data_1-embedding-layer_{layer}.npy")
-    test_data_2=np.load(f"{data_dir}/{model_name}/test_data_1-embedding-layer_{layer}.npy")
-    train_data_2=torch.as_tensor(train_data_2)
-    valid_data_2=torch.as_tensor(valid_data_2)
-    test_data_2=torch.as_tensor(test_data_2)
+train_data_1=np.load(f"{data_dir}/{model_name}/train_data_0-embedding-layer_{layer}.npy")
+valid_data_1=np.load(f"{data_dir}/{model_name}/dev_data_0-embedding-layer_{layer}.npy")
+test_data_1=np.load(f"{data_dir}/{model_name}/test_data_0-embedding-layer_{layer}.npy")
+train_data_1=torch.as_tensor(train_data_1)
+valid_data_1=torch.as_tensor(valid_data_1)
+test_data_1=torch.as_tensor(test_data_1)
 
-    train_dataset=TensorDataset(train_data_1,train_data_2,train_label)
-    valid_dataset=TensorDataset(valid_data_1,valid_data_2,valid_label)
-    test_dataset=TensorDataset(test_data_1,test_data_2,test_label)
-    batch_size=256
-    train_dataloader = DataLoader(train_dataset,shuffle=True, batch_size=batch_size,)
-    valid_dataloader = DataLoader(valid_dataset,shuffle=True, batch_size=batch_size)
-    test_dataloader = DataLoader(test_dataset,shuffle=False, batch_size=batch_size, num_workers=0)
-    model=Double_input_model(in_channels=valid_data_1.shape[2])
+train_data_2=np.load(f"{data_dir}/{model_name}/train_data_1-embedding-layer_{layer}.npy")
+valid_data_2=np.load(f"{data_dir}/{model_name}/dev_data_1-embedding-layer_{layer}.npy")
+test_data_2=np.load(f"{data_dir}/{model_name}/test_data_1-embedding-layer_{layer}.npy")
+train_data_2=torch.as_tensor(train_data_2)
+valid_data_2=torch.as_tensor(valid_data_2)
+test_data_2=torch.as_tensor(test_data_2)
 
-    model.to(device)
-    learning_rate=1e-3
-    epochs=80
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    loss_fn=DiffKL()
-    patience=10
-    count=0
-    min_valid_loss=1000
-    final_data={}
-    for epoch in range(epochs):
-        model=model.train()
-        train_epoch_loss = 0
-        train_num_batches = len(train_dataloader)
-        step=0
-        for one_batch in train_dataloader:
-            
-            data1,data2 ,targets = map(lambda x: x.to(device), one_batch)
-            data1=data1.to(torch.float32)
-            data2=data2.to(torch.float32)
-            target_pred = model(data1,data2)
-            target_pred=target_pred.to(torch.float32)
+train_dataset=TensorDataset(train_data_1,train_data_2,train_label)
+valid_dataset=TensorDataset(valid_data_1,valid_data_2,valid_label)
+test_dataset=TensorDataset(test_data_1,test_data_2,test_label)
+batch_size=128
+train_dataloader = DataLoader(train_dataset,shuffle=True, batch_size=batch_size,)
+valid_dataloader = DataLoader(valid_dataset,shuffle=True, batch_size=batch_size)
+test_dataloader = DataLoader(test_dataset,shuffle=False, batch_size=batch_size, num_workers=0)
+model=Double_input_model(in_channels=valid_data_1.shape[2])
+
+model.to(device)
+learning_rate=1e-3
+epochs=80
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+loss_fn=DiffKL()
+patience=10
+count=0
+min_valid_loss=1000
+final_data={}
+for epoch in range(epochs):
+    model=model.train()
+    train_epoch_loss = 0
+    train_num_batches = len(train_dataloader)
+    step=0
+    for one_batch in train_dataloader:
         
-            loss_lm = loss_fn(target_pred, targets)
-            train_epoch_loss += loss_lm.detach().item()
-            loss_lm.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            step += 1
-        #train epoch loss
-        train_epoch_loss /= train_num_batches
-        print(f"train_loss\t{train_epoch_loss}")
-        #validating
-        valid_loss = validating(valid_dataloader, model, loss_fn)
-        print(f"valid_loss\t{valid_loss}")
-        current_state={'epoch': epoch,
-                        'model_state_dict': copy.deepcopy(model.state_dict()),
-                        'optimizer_state_dict': copy.deepcopy(optimizer.state_dict()),
-                        'step': step,
-                        'train_loss': train_epoch_loss,
-                        'valid_loss': valid_loss,
-                        }
-        
-        if valid_loss<min_valid_loss:
-            print('update')
-            min_valid_loss=valid_loss
-            final_data=copy.deepcopy(current_state)
-            count=0
-        
-        count+=1
-        if count==patience:
-            break
+        data1,data2 ,targets = map(lambda x: x.to(device), one_batch)
+        data1=data1.to(torch.float32)
+        data2=data2.to(torch.float32)
+        target_pred = model(data1,data2)
+        target_pred=target_pred.to(torch.float32)
+    
+        loss_lm = loss_fn(target_pred, targets)
+        train_epoch_loss += loss_lm.detach().item()
+        loss_lm.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        step += 1
+    #train epoch loss
+    train_epoch_loss /= train_num_batches
+    print(f"train_loss\t{train_epoch_loss}")
+    #validating
+    valid_loss = validating(valid_dataloader, model, loss_fn)
+    print(f"valid_loss\t{valid_loss}")
+    current_state={'epoch': epoch,
+                    'model_state_dict': copy.deepcopy(model.state_dict()),
+                    'optimizer_state_dict': copy.deepcopy(optimizer.state_dict()),
+                    'step': step,
+                    'train_loss': train_epoch_loss,
+                    'valid_loss': valid_loss,
+                    }
+    
+    if valid_loss<min_valid_loss:
+        print('update')
+        min_valid_loss=valid_loss
+        final_data=copy.deepcopy(current_state)
+        count=0
+    
+    count+=1
+    if count==patience:
+        break
 
-    test_model=Double_input_model(in_channels=1*valid_data_1.shape[2])
-    test_model.to(device)
-    test_model.load_state_dict(final_data['model_state_dict'])
-    y_pred=testing(test_dataloader,test_model)
+test_model=Double_input_model(in_channels=1*valid_data_1.shape[2])
+test_model.to(device)
+test_model.load_state_dict(final_data['model_state_dict'])
+y_pred=testing(test_dataloader,test_model)
 
 y_test=test_label.cpu().detach().numpy()
 result=evaluate_test(y_test,y_pred)

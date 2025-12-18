@@ -20,28 +20,15 @@ from torch.backends import cudnn
 import scipy.stats
 from prefetch_generator import BackgroundGenerator
 
-task_name=sys.argv[1]
-model_name=sys.argv[2]
-data_dir=sys.argv[3]
-layer=int(sys.argv[4])
-random_seed=int(sys.argv[5])
-output_dim=int(sys.argv[6])
 
-regression=sys.argv[7]
-if regression=="True":
-    regression=True
-else:
-    regression=False
+model_name=sys.argv[1]
+data_dir=sys.argv[2]
+layer=int(sys.argv[3])
+random_seed=int(sys.argv[4])
+output_dim=int(sys.argv[5])
 
-# model_name="MS20-4K-18"
-# data_dir="/lustre/grp/gglab/liangyx/data/dnalingo_dev/benchmark_dataset/EPI/GM12878"
-# layer=15
-# task_name="epi"
-# regression=False
-# multi_seq=True
 
-# output_dim=1
-# random_seed=42
+
 num_targets=output_dim
 seed = random_seed
 cudnn.benchmark = False            # if benchmark=True, deterministic will be False
@@ -60,31 +47,6 @@ if os.path.exists(save_dir):
     pass
 else:
     os.mkdir(save_dir)
-
-
-'''dataset'''
-
-# dataset
-# class H5Dataset(Dataset):
-#     def __init__(self, dataset_type, data_dir ,output_dim=None,task_name='exp'):
-#         super().__init__()
-#         # check dataset_type is train, test or dev
-#         if dataset_type not in ["train", "test", "dev"]:
-#             raise ValueError("dataset_type must be either 'train', 'test' or 'dev'")
-#         # load data
-#         #self.data_x_all = np.load(data_x_path + dataset_type + ".npy")
-#         self.data_x_all_1 = h5py.File(data_dir+ f"/{model_name}" + f"/{dataset_type}" + f"_data_0-embedding-layer_{layer}.h5", "r")["embedding"][:]
-#         self.data_x_all_2 = h5py.File(data_dir+ f"/{model_name}" + f"/{dataset_type}" + f"_data_1-embedding-layer_{layer}.h5", "r")["embedding"][:]
-#         self.data_y_all = np.loadtxt(f"{data_dir}" + f"/{dataset_type}" + "_label.txt",dtype=int)
-#         self.data_shape=self.data_x_all_1.shape
-#     def __len__(self):
-#         return self.data_y_all.shape[0]
-#     def __getitem__(self, idx):
-#         data_x_1 = self.data_x_all_1[idx]
-#         data_x_2 = self.data_x_all_2[idx]
-#         data_y = self.data_y_all[idx]
-#         return torch.tensor(data_x_1), torch.tensor(data_x_2), torch.tensor(data_y).unsqueeze(0)
-
 
 
 import h5py
@@ -161,27 +123,22 @@ file_paths_2 = sorted(glob.glob(data_dir + f"/{model_name}/{data_type}_data_1-sp
 labels = np.loadtxt(f"{data_dir}/{data_type}_label.txt", dtype=int).reshape(-1,1)
 import numpy as np
 
-# 示例：生成一个长度为 15001 的 NumPy 向量
 
-
-# 计算分割的组数
 group_size = 5000
 num_groups = len(labels) // group_size + (1 if len(labels) % group_size != 0 else 0)
 
-# 创建一个列表，存储每个分组
+
 split_vector = []
 
-# 使用循环分割，保证每组有 5000 个元素
 for i in range(num_groups - 1):
     split_vector.append(labels[i * group_size : (i + 1) * group_size])
 
-# 处理最后一组
 split_vector.append(labels[(num_groups - 1) * group_size:])
 
 # Create interleaved dataset for dual inputs
 cycle_length = len(file_paths_1)  # Number of file pairs to cycle through
 train_dataset = InterleavedDataset(file_paths_1, file_paths_2, split_vector, cycle_length)
-batch_size=256
+batch_size=128
 # DataLoader
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=32, prefetch_factor=2)
 
@@ -219,7 +176,7 @@ class EmbeddingDataset(Dataset):
         with h5py.File(self.file_list1[0], 'r') as f:
             self.data_shape=f['embedding'][0].shape
         self.file_indices = []  # Map global index to (file_id, index_within_file)
-        # 预计算索引映射（全局索引到文件索引）
+        
         for file_id, file_path in enumerate(self.file_list1 ):
             with h5py.File(file_path, 'r') as f:
                 num_samples = len(f['embedding'])
@@ -229,23 +186,21 @@ class EmbeddingDataset(Dataset):
     def __len__(self):
         return len(self.file_indices)
     def __getitem__(self, idx):
-        # 获取全局索引对应的文件和文件内的索引
+        
         file_id, index_within_file = self.file_indices[idx]
         file_path_1 = self.file_list1[file_id]
         file_path_2 = self.file_list2[file_id]
         label=self.label[idx]
-        # 加载文件并获取数据
         with h5py.File(file_path_1, 'r') as f1:
             embedding1 = f1['embedding'][index_within_file]
         with h5py.File(file_path_2, 'r') as f2:
             embedding2 = f2['embedding'][index_within_file]
-        # 转换为 PyTorch 张量
         embedding1 = torch.tensor(embedding1, dtype=torch.float32)
         embedding2 = torch.tensor(embedding2, dtype=torch.float32)
         label = torch.tensor(label, dtype=torch.float32).unsqueeze(0)
         return embedding1,embedding2, label
+    
 
-# train_dataset=EmbeddingDataset("train")
 valid_dataset=EmbeddingDataset("dev")
 test_dataset=EmbeddingDataset("test")
 
@@ -255,7 +210,6 @@ test_dataset=EmbeddingDataset("test")
 
 def testing(test_dataloader, model):
     model.eval().cuda()    
-    # y_pred=np.empty((len(test_dataloader.dataset),num_targets))
     begin=0
     test_flag=True
     with torch.no_grad():
@@ -284,7 +238,6 @@ def validating(valid_dataloader, model, loss_fn):
     print("validating")    
     with torch.no_grad():
         for one_batch in valid_dataloader:
-            
             data1,data2 ,targets = map(lambda x: x.to(device), one_batch)
             data1=data1.to(torch.float32)
             data2=data2.to(torch.float32)
@@ -342,15 +295,8 @@ class DownstreamModel(nn.Module):
         return x
 
 
-
-# train_dataloader=PrefetchDataLoader(train_dataset,batch_size,shuffle=True,num_workers=16,pin_memory=True)
 valid_dataloader=PrefetchDataLoader(valid_dataset,batch_size,shuffle=True,num_workers=32,pin_memory=True)
 test_dataloader=PrefetchDataLoader(test_dataset,batch_size,shuffle=False,num_workers=32,pin_memory=True)
-
-# train_dataloader = DataLoader(train_dataset,shuffle=True, batch_size=batch_size,num_workers=8,prefetch_factor=8,pin_memory=True)
-# valid_dataloader = DataLoader(valid_dataset,shuffle=True, batch_size=batch_size,num_workers=8,prefetch_factor=8,pin_memory=True)
-# test_dataloader = DataLoader(test_dataset,shuffle=False, batch_size=batch_size, num_workers=8,prefetch_factor=8,pin_memory=True)
-
 
 
 model=DownstreamModel(in_channels=valid_dataset.data_shape[2])
@@ -363,7 +309,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 loss_fn=torch.nn.BCELoss()
 
 
-patience=5
+patience=10
 count=0
 min_valid_loss=1000
 final_data={}
@@ -431,7 +377,7 @@ y_pred=testing(test_dataloader,test_model)
 
 y_test=test_dataset.label
 y_pred=y_pred.reshape(-1)
-with open(f"{save_dir}/metrics-{layer}.txt",'a') as f:
+with open(f"{save_dir}/metrics-{model_name}-{layer}.txt",'a') as f:
     
     auc=roc_auc_score(y_test,y_pred) 
     print(auc)

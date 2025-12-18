@@ -18,15 +18,15 @@ from sklearn import metrics
 from torch.backends import cudnn
 import scipy.stats
 
-task_name=sys.argv[1]
-model_name=sys.argv[2]
-data_dir=sys.argv[3]
-layer=int(sys.argv[4])
-random_seed=int(sys.argv[5])
-output_dim=int(sys.argv[6])
 
-task_id="default"
-regression=sys.argv[7]
+model_name=sys.argv[1]
+data_dir=sys.argv[2]
+layer=int(sys.argv[3])
+random_seed=int(sys.argv[4])
+output_dim=int(sys.argv[5])
+
+
+regression=sys.argv[6]
 if regression=="True":
     regression=True
 else:
@@ -34,7 +34,7 @@ else:
 
 num_targets=output_dim
 seed = random_seed
-cudnn.benchmark = False            # if benchmark=True, deterministic will be False
+cudnn.benchmark = False            
 cudnn.deterministic = True
 random.seed(seed)
 np.random.seed(seed)
@@ -64,11 +64,8 @@ class H5Dataset(Dataset):
         if dataset_type not in ["train", "test", "dev"]:
             raise ValueError("dataset_type must be either 'train', 'test' or 'dev'")
         # load data
-        if task_name=='exp':
-            # self.data_x_all = np.load(data_x_path + dataset_type + ".npy")
-            self.data_x_all = np.load(data_dir+ f"/{model_name}" + f"/{dataset_type}" + f"_seq-embedding-layer_{layer}.npy")
-            # self.data_x_all = h5py.File(data_dir+ f"/{model_name}" + f"/{dataset_type}" + f"_seq-embedding-layer_{layer}.h5", "r")["embedding"][:]
-            self.data_y_all = np.load(f"{data_dir}" + f"/{dataset_type}" + "_target.npy")
+        self.data_x_all = np.load(data_dir+ f"/{model_name}" + f"/{dataset_type}" + f"_seq-embedding-layer_{layer}.npy")
+        self.data_y_all = np.load(f"{data_dir}" + f"/{dataset_type}" + "_target.npy")
         self.data_shape=self.data_x_all.shape
     def __len__(self):
         return self.data_y_all.shape[0]
@@ -156,25 +153,6 @@ class DownstreamModel(nn.Module):
 
 
 
-class Conv_block(nn.Module):
-    def __init__(self,in_channels, out_channels,conv_kernel_size,conv_padding,pool=True,pool_size=0):
-        super(Conv_block,self).__init__()
-        conv_layer=nn.Conv1d(in_channels, out_channels, kernel_size=conv_kernel_size,padding=conv_padding).float()
-        batchnorm=nn.BatchNorm1d(out_channels).float()
-        gelu=nn.GELU()
-        self.blk=nn.Sequential(
-            conv_layer,
-            batchnorm,
-            gelu
-        )
-        self.pool_layer=nn.MaxPool1d(pool_size,pool_size)
-        self.pool=pool
-    def forward(self,X):
-        X=self.blk(X)
-        if self.pool:
-            X=self.pool_layer(X)
-        return X
-
 
 batch_size=128
 train_dataloader = DataLoader(train_dataset,shuffle=True, batch_size=batch_size,num_workers=8)
@@ -182,7 +160,6 @@ valid_dataloader = DataLoader(valid_dataset,shuffle=True, batch_size=batch_size,
 test_dataloader = DataLoader(test_dataset,shuffle=False, batch_size=batch_size, num_workers=0)
 
 model=DownstreamModel(in_channels=valid_dataset.data_shape[2])
-# model=Basenji_Basset()
 model.to(device)
 
 learning_rate=1e-3
@@ -262,20 +239,17 @@ def evaluate_test(test_true, test_pred):
     return corr_list,pear_list
 
 
-
-
-
 y_test=test_dataset.data_y_all
 spearman_list,pearson_list=evaluate_test(y_test,y_pred)
 spearman_list=[str(elem) for elem in spearman_list]
 pearson_list=[str(elem) for elem in pearson_list]
 
-with open(f"{save_dir}/{task_id}-metrics-{layer}.txt",'a') as f:
+with open(f"{save_dir}/metrics-{model_name}-{layer}.txt",'a') as f:
     
     spearman_v='\t'.join(spearman_list)
     pearson_v='\t'.join(pearson_list)
     f.write(f"{model_name}\t{random_seed}\tspearmanR\t{spearman_v}\n")
     f.write(f"{model_name}\t{random_seed}\tpearsonR\t{pearson_v}\n")
 
-np.save(save_dir+f"/{task_id}-test-{model_name}_{layer}_{random_seed}_pred.npy",y_pred)
-torch.save(final_data,f"{save_dir}/{task_id}-checkpoint-{model_name}_{layer}_{random_seed}.pt")
+np.save(save_dir+f"/test-{model_name}_{layer}_{random_seed}_pred.npy",y_pred)
+torch.save(final_data,f"{save_dir}/checkpoint-{model_name}_{layer}_{random_seed}.pt")

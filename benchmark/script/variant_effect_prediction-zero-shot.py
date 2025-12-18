@@ -23,9 +23,7 @@ def euclidean_distance(vector_a, vector_b):
 
 dirnames=sys.argv[1]
 model_name=sys.argv[2]
-var_type=sys.argv[3]
-mean_type=int(sys.argv[4])
-layer=int(sys.argv[5])
+layer=int(sys.argv[3])
 
 with open(f"{dirnames}/metrics-{model_name}-{layer}.txt",'w') as f1:
     label=np.concatenate([np.loadtxt(f"{dirnames}/{data_type}_label.txt",dtype=int) for data_type in ['test','dev','train']])

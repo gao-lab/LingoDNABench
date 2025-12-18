@@ -16,33 +16,18 @@ from sklearn.metrics import roc_auc_score, f1_score, accuracy_score, recall_scor
 from sklearn import metrics
 from torch.backends import cudnn
 
+model_name=sys.argv[1]
+data_dir=sys.argv[2]
+layer=int(sys.argv[3])
+random_seed=int(sys.argv[4])
+output_dim=int(sys.argv[5])
 
-task_name=sys.argv[1]
-model_name=sys.argv[2]
-data_dir=sys.argv[3]
-layer=int(sys.argv[4])
-random_seed=int(sys.argv[5])
-output_dim=int(sys.argv[6])
-
-regression=sys.argv[7]
+regression=sys.argv[6]
 if regression=="True":
     regression=True
 else:
     regression=False
-multi_seq=sys.argv[8]
-if multi_seq=="True":
-    multi_seq=True
-else:
-    multi_seq=False
-# model_name="MS4-512-80"
-# data_dir="/lustre/grp/gglab/liangyx/data/dnalingo_dev/benchmark_dataset/CRE_activity/HepG2"
-# layer=11
-# task_name="CRE_HepG2"
-# regression=True
-# multi_seq=False
 
-# output_dim=1
-# random_seed=42
 num_targets=output_dim
 seed = random_seed
 cudnn.benchmark = False            # if benchmark=True, deterministic will be False
@@ -55,9 +40,6 @@ torch.cuda.manual_seed_all(seed)   # 为所有GPU设置随机种子
 '''devices'''
 device=torch.device('cuda')
 
-
-
-
 save_dir=f"{data_dir}/{model_name}/checkpoint"
 if os.path.exists(save_dir):
     pass
@@ -66,34 +48,33 @@ else:
 
 
 '''dataset'''
-if multi_seq:
-    pass
+
+
+if regression:
+    train_label=np.loadtxt(data_dir+'/train_label.txt',dtype=float)
+    valid_label=np.loadtxt(data_dir+'/dev_label.txt',dtype=float)
+    test_label=np.loadtxt(data_dir+'/test_label.txt',dtype=float)
 else:
-    if regression:
-        train_label=np.loadtxt(data_dir+'/train_label.txt',dtype=float)
-        valid_label=np.loadtxt(data_dir+'/dev_label.txt',dtype=float)
-        test_label=np.loadtxt(data_dir+'/test_label.txt',dtype=float)
-    else:
-        train_label=np.loadtxt(data_dir+'/train_label.txt',dtype=int)
-        valid_label=np.loadtxt(data_dir+'/dev_label.txt',dtype=int)
-        test_label=np.loadtxt(data_dir+'/test_label.txt',dtype=int)
-    train_label=torch.as_tensor(train_label)
-    valid_label=torch.as_tensor(valid_label)
-    test_label=torch.as_tensor(test_label)
-    train_data=np.load(f"{data_dir}/{model_name}/train_data_0-embedding-layer_{layer}.npy")
-    valid_data=np.load(f"{data_dir}/{model_name}/dev_data_0-embedding-layer_{layer}.npy")
-    test_data=np.load(f"{data_dir}/{model_name}/test_data_0-embedding-layer_{layer}.npy")
-    train_data=torch.as_tensor(train_data)
-    valid_data=torch.as_tensor(valid_data)
-    test_data=torch.as_tensor(test_data)
-    if len(valid_label.shape)==1:
-        train_dataset=TensorDataset(train_data,train_label.unsqueeze(1))
-        valid_dataset=TensorDataset(valid_data,valid_label.unsqueeze(1))
-        test_dataset=TensorDataset(test_data,test_label.unsqueeze(1))
-    else:
-        train_dataset=TensorDataset(train_data,train_label)
-        valid_dataset=TensorDataset(valid_data,valid_label)
-        test_dataset=TensorDataset(test_data,test_label)
+    train_label=np.loadtxt(data_dir+'/train_label.txt',dtype=int)
+    valid_label=np.loadtxt(data_dir+'/dev_label.txt',dtype=int)
+    test_label=np.loadtxt(data_dir+'/test_label.txt',dtype=int)
+train_label=torch.as_tensor(train_label)
+valid_label=torch.as_tensor(valid_label)
+test_label=torch.as_tensor(test_label)
+train_data=np.load(f"{data_dir}/{model_name}/train_data_0-embedding-layer_{layer}.npy")
+valid_data=np.load(f"{data_dir}/{model_name}/dev_data_0-embedding-layer_{layer}.npy")
+test_data=np.load(f"{data_dir}/{model_name}/test_data_0-embedding-layer_{layer}.npy")
+train_data=torch.as_tensor(train_data)
+valid_data=torch.as_tensor(valid_data)
+test_data=torch.as_tensor(test_data)
+if len(valid_label.shape)==1:
+    train_dataset=TensorDataset(train_data,train_label.unsqueeze(1))
+    valid_dataset=TensorDataset(valid_data,valid_label.unsqueeze(1))
+    test_dataset=TensorDataset(test_data,test_label.unsqueeze(1))
+else:
+    train_dataset=TensorDataset(train_data,train_label)
+    valid_dataset=TensorDataset(valid_data,valid_label)
+    test_dataset=TensorDataset(test_data,test_label)
 
 def testing(test_dataloader, model, num_targets):
     model.eval().cuda()    
@@ -102,23 +83,21 @@ def testing(test_dataloader, model, num_targets):
     begin=0
     with torch.no_grad():
         for one_batch in test_dataloader:
-            if multi_seq:
-                pass
-            else:
-                DNA ,targets = map(lambda x: x.to(device), one_batch)
-                DNA=DNA.to(torch.float32)
-                target_pred = model(DNA)
-                num=DNA.shape[0]
-                targets=targets.to(torch.float32)
-                target_pred=target_pred.to(torch.float32)
-                if not output_dim==1:
-                    targets=targets.to(torch.int32)
-                    targets=torch.tensor(targets.squeeze(1),dtype=torch.long)
-                    target_pred = nn.Softmax(dim=1)(target_pred)
-                
-                # y_test[begin:begin+num,:]=targets.cpu().detach().numpy()
-                y_pred[begin:begin+num,:]=target_pred.cpu().detach().numpy()
-                begin+=num
+            
+            DNA ,targets = map(lambda x: x.to(device), one_batch)
+            DNA=DNA.to(torch.float32)
+            target_pred = model(DNA)
+            num=DNA.shape[0]
+            targets=targets.to(torch.float32)
+            target_pred=target_pred.to(torch.float32)
+            if not output_dim==1:
+                targets=targets.to(torch.int32)
+                targets=torch.tensor(targets.squeeze(1),dtype=torch.long)
+                target_pred = nn.Softmax(dim=1)(target_pred)
+            
+            # y_test[begin:begin+num,:]=targets.cpu().detach().numpy()
+            y_pred[begin:begin+num,:]=target_pred.cpu().detach().numpy()
+            begin+=num
     return y_pred
 
 def validating(valid_dataloader, model, loss_fn):
@@ -129,18 +108,16 @@ def validating(valid_dataloader, model, loss_fn):
     print("validating")    
     with torch.no_grad():
         for one_batch in valid_dataloader:
-            if multi_seq:
-                pass
-            else:
-                DNA ,targets = map(lambda x: x.to(device), one_batch)
-                DNA=DNA.to(torch.float32)
-                target_pred = model(DNA)
-                target_pred=target_pred.to(torch.float32)
-                targets=targets.to(torch.float32)
-                if not output_dim==1:
-                    targets=targets.to(torch.int32)
-                    targets=torch.tensor(targets.squeeze(1),dtype=torch.long)
-                    # target_pred = nn.Softmax(dim=1)(target_pred)
+            
+            DNA ,targets = map(lambda x: x.to(device), one_batch)
+            DNA=DNA.to(torch.float32)
+            target_pred = model(DNA)
+            target_pred=target_pred.to(torch.float32)
+            targets=targets.to(torch.float32)
+            if not output_dim==1:
+                targets=targets.to(torch.int32)
+                targets=torch.tensor(targets.squeeze(1),dtype=torch.long)
+                # target_pred = nn.Softmax(dim=1)(target_pred)
                 
             loss_lm = loss_fn(target_pred, targets)
             test_loss += loss_lm.detach().item()
@@ -185,11 +162,9 @@ batch_size=64
 train_dataloader = DataLoader(train_dataset,shuffle=True, batch_size=batch_size,)
 valid_dataloader = DataLoader(valid_dataset,shuffle=True, batch_size=batch_size)
 test_dataloader = DataLoader(test_dataset,shuffle=False, batch_size=batch_size, num_workers=0)
-if multi_seq:
-    pass
-else:
-    model=DownstreamModel(in_channels=valid_data.shape[2])
-    model.to(device)
+
+model=DownstreamModel(in_channels=valid_data.shape[2])
+model.to(device)
 
 learning_rate=1e-3
 epochs=80
@@ -213,19 +188,17 @@ for epoch in range(epochs):
     step=0
     for one_batch in train_dataloader:
         
-        if multi_seq:
-            pass
-        else:
-            DNA ,targets = map(lambda x: x.to(device), one_batch)
-            DNA=DNA.to(torch.float32)
-            target_pred = model(DNA)
-            target_pred=target_pred.to(torch.float32)
-            targets=targets.to(torch.float32)
-            if not output_dim==1:
-                targets=targets.to(torch.int32)
-                targets=torch.tensor(targets.squeeze(1),dtype=torch.long)
-                # target_pred = nn.Softmax(dim=1)(target_pred)
-                
+
+        DNA ,targets = map(lambda x: x.to(device), one_batch)
+        DNA=DNA.to(torch.float32)
+        target_pred = model(DNA)
+        target_pred=target_pred.to(torch.float32)
+        targets=targets.to(torch.float32)
+        if not output_dim==1:
+            targets=targets.to(torch.int32)
+            targets=torch.tensor(targets.squeeze(1),dtype=torch.long)
+            # target_pred = nn.Softmax(dim=1)(target_pred)
+            
         loss_lm = loss_fn(target_pred, targets)
         train_epoch_loss += loss_lm.detach().item()
         print(loss_lm.detach().item())
@@ -264,7 +237,6 @@ test_model.load_state_dict(final_data['model_state_dict'])
 
 y_pred=testing(test_dataloader,test_model,output_dim)
 
-
 if regression:
     y_test=test_label.detach().cpu().numpy()
     import scipy.stats
@@ -302,6 +274,5 @@ else:
         with open(f"{save_dir}/metrics-{layer}.txt",'a') as f:
             f.write(f"{model_name}\t{random_seed}\t{auc}\n")
 
-# np.save(save_dir+f"/test-label.npy",y_test)
 np.save(save_dir+f"/test-{model_name}_{layer}_{random_seed}_pred.npy",y_pred)
 torch.save(final_data,f"{save_dir}/checkpoint-{model_name}_{layer}_{random_seed}.pt")
