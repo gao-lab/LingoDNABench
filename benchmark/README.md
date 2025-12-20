@@ -1,11 +1,14 @@
 # Benchmark
 ## Genomic language model preparation
 Download the genomic language model to benchmarking
+```
 sh models-download.sh
-
+```
 ## Extracting embeddings
 An example for extracting embedding in TATA-promoter (proximal) prediction dataset.
+```
 sh run-get-embedding.sh ./dataset/promoter/prom_300_tata 300
+```
 
 ## Downstream applications
 ### default applications:
