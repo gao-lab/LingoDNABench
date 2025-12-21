@@ -1,13 +1,3 @@
-#!/bin/bash
-#SBATCH -J get-embedding-cfdna
-#SBATCH -p gpu32
-#SBATCH -N 1
-#SBATCH -n 1
-#SBATCH -o ../logs/get_embedding_%j.%N.out
-#SBATCH --gres=gpu:1
-#SBATCH -x c05b26n01
-
-
 # Promoter as example
 
 data_dir="./dataset/promoter/prom_300_tata"
