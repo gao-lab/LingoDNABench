@@ -8,7 +8,7 @@
 #SBATCH -x c05b26n01
 
 
-# ## enhancer
+# Promoter as example
 
 data_dir="./dataset/promoter/prom_300_tata"
 embedding_len=300
@@ -23,7 +23,7 @@ do
     for file in `find $dir -type f -name "*data*"|grep -v embedding`
         do
         echo "$file $dir"
-        python get-embeddings.py omnina $model_name $file $dir/$model_name $embedding_len 16
+        python get-embeddings.py omnina $model_name $file $dir/$model_name $embedding_len -1
     done
 done
 
@@ -37,7 +37,7 @@ do
     for file in `find $dir -type f -name "*data*"|grep -v embedding` 
         do
         echo "$file $dir"
-        python get-embeddings.py nt $model_name $file $dir/$model_name $((embedding_len/6+1)) 32
+        python get-embeddings.py nt $model_name $file $dir/$model_name $((embedding_len/6+1)) -1
     done
 done
 
@@ -51,7 +51,7 @@ do
     for file in `find $dir -type f -name "*data*"|grep -v embedding` 
         do
         echo "$file $dir"
-        python get-embeddings.py $model_name $model_name $file $dir/$model_name $embedding_len 11
+        python get-embeddings.py $model_name $model_name $file $dir/$model_name $embedding_len -1
     done
 done
 
@@ -65,7 +65,7 @@ do
     for file in `find $dir -type f -name "*data*"|grep -v embedding` 
         do
         echo "$file $dir"
-        python get-embeddings.py dnabert $model_name $file $dir/$model_name $((embedding_len-3+1)) 12
+        python get-embeddings.py dnabert $model_name $file $dir/$model_name $((embedding_len-3+1)) -1
     done
 done
 
