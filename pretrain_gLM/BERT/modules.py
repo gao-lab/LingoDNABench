@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from BaselineBERT.attention import MHA_FlashAttention
+from BERT.attention import MHA_FlashAttention
 import math
 
 

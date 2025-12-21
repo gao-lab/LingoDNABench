@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import numpy as np
 from flash_attn import flash_attn_qkvpacked_func
-from BaselineBERT.rope import RotaryEmbedding
+from BERT.rope import RotaryEmbedding
 
 
 #Flash attention
