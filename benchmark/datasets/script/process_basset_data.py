@@ -4,7 +4,13 @@ import os
 import Bio
 from Bio import SeqIO
 import subprocess
+import sys
 from multiprocessing.pool import Pool
+feature_name=sys.argv[1]
+data_dir=sys.argv[2]
+split_dir=sys.argv[3]
+num_targets=int(sys.argv[4])
+split_size=int(sys.argv[5])
 def split_data(data,split_size,save_dir,elem,feature_name,types):
     begin=0
     cnt=0
@@ -34,11 +40,6 @@ def seqtopad(sequence):
             S[i,basedict[sequence[i]]]=np.float32(1)
     return np.transpose(S)
 
-feature_name='TFBS'
-data_dir="/lustre/grp/gglab/liangyx/data/Transcription_Factors/TFBS_not_merge"
-split_dir="/lustre/grp/gglab/liangyx/data/Transcription_Factors/TFBS_not_merge/split_50k"
-num_targets=3572
-split_size=50_000
 for elem in ['train']:
     print(elem)
     seqs=[]
@@ -59,13 +60,8 @@ for elem in ['train']:
         for seq in seqs:
             seq_f.write(f"{seq}\n")
     subprocess.call(f"split -d -l {split_size} {data_dir}/{feature_name}_{elem}_DNA.seq {data_dir}/{feature_name}_{elem}", shell=True)
-    seqs=np.array(seqs)
-    pool=Pool(processes=8)
-    print("processing onehot")
-    onehot_result=pool.map(seqtopad,seqs)
-    onehot_result=np.array(onehot_result)
+    
     np.save(os.path.join(data_dir,f"{feature_name}_{elem}_labels.npy"),labels)
-    np.save(os.path.join(data_dir,f"{feature_name}_{elem}_onehot.npy"),onehot_result)
     print("spliting...")
     """label"""
     split_data(labels,split_size,split_dir,elem,feature_name,"labels")
