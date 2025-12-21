@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from dpb_bert.modules import Embedding, EncoderLayer
+from BaselineBERT.modules import Embedding, EncoderLayer
 
 # model
 class DNALingo(nn.Module):

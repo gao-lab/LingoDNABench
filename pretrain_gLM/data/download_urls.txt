@@ -1,0 +1,7 @@
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/635/GCA_000001635.9_GRCm39/GCA_000001635.9_GRCm39_genomic.fna.gz
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/009/914/755/GCA_009914755.4_T2T-CHM13v2.0/GCA_009914755.4_T2T-CHM13v2.0_genomic.fna.gz
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/028/858/775/GCA_028858775.3_NHGRI_mPanTro3-v2.1_pri/GCA_028858775.3_NHGRI_mPanTro3-v2.1_pri_genomic.fna.gz
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/003/339/765/GCA_003339765.3_Mmul_10/GCA_003339765.3_Mmul_10_genomic.fna.gz
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/011/100/685/GCA_011100685.1_UU_Cfam_GSD_1.0/GCA_011100685.1_UU_Cfam_GSD_1.0_genomic.fna.gz
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/323/735/GCA_036323735.1_GRCr8/GCA_036323735.1_GRCr8_genomic.fna.gz
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/027/887/165/GCA_027887165.1_mMonDom1.pri/GCA_027887165.1_mMonDom1.pri_genomic.fna.gz
