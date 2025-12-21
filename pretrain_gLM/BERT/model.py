@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from BaselineBERT.modules import Embedding, EncoderLayer
+from BERT.modules import Embedding, EncoderLayer
 
 # model
-class DNALingo(nn.Module):
+class BaselineBERT(nn.Module):
     def __init__(self, max_vocab, n_heads, d_kv, 
                 n_layers, dropout_rate=0.0, bias=False, eval_mode=False
                 ):

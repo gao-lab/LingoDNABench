@@ -18,8 +18,7 @@ class DNATokenizer:
     def __init__(
         self, 
         vocab = None, 
-        kmer: int = 3, 
-        overlap_token: bool = True,
+        kmer: int = 1, 
         cls_token: str = "CLS", 
         eos_token: str = "EOS", 
         mask_token: str = "MASK", 
@@ -32,7 +31,6 @@ class DNATokenizer:
         self.vocab = vocab
         self.special_tokens = [pad_token, cls_token, eos_token, mask_token, unk_token]
         self.kmer = kmer
-        self.overlap_token = overlap_token
 
         self.token2id = {f'[{name}]': idx for idx, name in enumerate(self.special_tokens)}
         self.num_special_tokens = len(self.special_tokens)
@@ -48,20 +46,13 @@ class DNATokenizer:
 
     def __call__(self, seq: str):
         tokens = [] 
-        if self.overlap_token:
-            for i in range(0, len(seq) - self.kmer + 1):
-                if seq[i:i+self.kmer] not in self.token2id:
-                    tokens.append(self.token2id['[UNK]'])
-                else:
-                    tokens.append(self.token2id[seq[i:i+self.kmer]])
-        else:
-            for i in range(0, len(seq), self.kmer):
-                if len(seq[i:i+self.kmer]) < self.kmer:
-                    break
-                if seq[i:i+self.kmer] not in self.token2id:
-                    tokens.append(self.token2id['[UNK]'])
-                else:
-                    tokens.append(self.token2id[seq[i:i+self.kmer]])
+        for i in range(0, len(seq), self.kmer):
+            if len(seq[i:i+self.kmer]) < self.kmer:
+                break
+            if seq[i:i+self.kmer] not in self.token2id:
+                tokens.append(self.token2id['[UNK]'])
+            else:
+                tokens.append(self.token2id[seq[i:i+self.kmer]])
         tokens = [self.token2id['[CLS]']] + tokens + [self.token2id['[EOS]']]
         return tokens
 
@@ -142,7 +133,6 @@ class DataCollatorForDNA:
         p_mask: float = 0.8, 
         p_replace: float = 0.1, 
         mlm_prob: float = 0.15,
-        continue_mask: bool = True,
         max_length: int = None, 
         dynamic_length: bool = False,
         dynamic_length_prob: float = 0.1,
@@ -153,58 +143,28 @@ class DataCollatorForDNA:
         self.p_mask = p_mask
         self.p_replace = p_replace
         self.mlm_prob = mlm_prob
-        self.continue_mask = continue_mask
         self.max_length = max_length
         self.dynamic_length = dynamic_length
         self.dynamic_length_prob = dynamic_length_prob
         self.dynamic_min_length = dynamic_min_length
 
-
     def mask_fn(self, cand_pos, input_ids):
         masked_pos, masked_tokens = [], []
-        if self.continue_mask:
-            for pos in cand_pos:
-                for i in range(self.tokenizer.kmer):
-                    pos_tmp = pos + i
-                    '''
-                    # avoid mask [EOS]
-                    if input_ids[pos_tmp] == self.tokenizer.token2id['[EOS]']:
-                        continue
-                    # avoid out of range
-                    if pos_tmp > len(input_ids):
-                        break
-                    '''
-                    masked_pos.append(pos_tmp)
-                    masked_tokens.append(input_ids[pos_tmp])
-                    # maks
-                    if random.random() < self.p_mask:
-                        input_ids[pos_tmp] = self.tokenizer.token2id['[MASK]']
-                    elif random.random() > self.p_mask + self.p_replace:
-                        input_ids[pos_tmp] = random.randint(4, self.tokenizer.vocab_size-1)
-                    else:
-                        pass # do noting with 1-p_mask-p_replace probability
-        else:
-            for pos in cand_pos:
-                masked_pos.append(pos)
-                masked_tokens.append(input_ids[pos])
-                if random.random() < self.p_mask:
-                    input_ids[pos] = self.tokenizer.token2id['[MASK]']
-                elif random.random() > self.p_mask + self.p_replace:
-                    input_ids[pos] = random.randint(4, self.tokenizer.vocab_size-1)
-                else:
-                    pass # do noting with 1-p_mask-p_replace probability
+        for pos in cand_pos:
+            masked_pos.append(pos)
+            masked_tokens.append(input_ids[pos])
+            if random.random() < self.p_mask:
+                input_ids[pos] = self.tokenizer.token2id['[MASK]']
+            elif random.random() > self.p_mask + self.p_replace:
+                input_ids[pos] = random.randint(4, self.tokenizer.vocab_size-1)
+            else:
+                pass # do noting with 1-p_mask-p_replace probability
         return input_ids, masked_pos, masked_tokens
 
     def mask_tokens(self, padded_input_ids: torch.Tensor):
-        #random select 15%/mask_len(k-mers) tokens keeping with a min distance of mask_len(k-mers)
-        if self.continue_mask:
-            mlm_mask_num = int((self.mlm_prob * len(padded_input_ids))/self.tokenizer.kmer)
-            cand_mask_pos = [self.tokenizer.kmer*idx + x for idx, x in enumerate(sorted(random.sample(range(1, len(padded_input_ids)- (self.tokenizer.kmer - 1) - self.tokenizer.kmer * mlm_mask_num), mlm_mask_num)))]
-            return self.mask_fn(cand_mask_pos, padded_input_ids)
-        else:
-            cand_pos = [i for i, t in enumerate(padded_input_ids) if t != self.tokenizer.token2id['[CLS]'] and t != self.tokenizer.token2id['[EOS]']]
-            shuffle(cand_pos)
-            mlm_mask_num = int(self.mlm_prob * len(padded_input_ids))
+        cand_pos = [i for i, t in enumerate(padded_input_ids) if t != self.tokenizer.token2id['[CLS]'] and t != self.tokenizer.token2id['[EOS]']]
+        shuffle(cand_pos)
+        mlm_mask_num = int(self.mlm_prob * len(padded_input_ids))
         return self.mask_fn(cand_pos[0:mlm_mask_num], padded_input_ids)
     
     def __call__(self, batch_data: torch.Tensor):
