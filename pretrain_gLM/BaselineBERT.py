@@ -1,6 +1,9 @@
+# LingoDNABench: https://github.com/gao-lab/LingoDNABench
+
+import argparse
 import os
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-#os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4,5"
+import sys
+sys.path.append("./")
 import torch
 from torch.utils.data import DataLoader
 import torch.distributed as dist
@@ -14,51 +17,49 @@ from torch.distributed.fsdp import (
     FullStateDictConfig,
     FullOptimStateDictConfig,
     StateDictType,
-
 )
-from dpb_bert.modules import EncoderLayer
-from dpb_bert.data import  DNADataset, DNATokenizer, DataCollatorForDNA
-from dpb_bert.model import DNALingo
-from dpb_bert.utils import get_param_num
-from collections import OrderedDict
-from torch.utils.tensorboard import SummaryWriter
-import time
+# BERT modules
+from BERT.modules import EncoderLayer
+from BERT.data import  DNADataset, DNATokenizer, DataCollatorForDNA
+from BERT.model import BaselineBERT
+from BERT.utils import get_param_num, load_config
 
 
-'''path'''
-model_save_path = log_path = "./model_test2_bert_4k_ms7_k1"
-os.makedirs(model_save_path, exist_ok=True)
+parser = argparse.ArgumentParser(description='Train BERT-like gLM baseline model.')
+parser.add_argument('--train_data', type = str, default = "./data/dataset/human.4096.h5")
+parser.add_argument('--config_file', type = str, default = "./config/Baseline_gLM.config.json")
+parser.add_argument('--model_save_path', type = str, default = "./model/human_gLM")
+parser.add_argument('--random_seed', type = int, default = 666, help = 'Random seed, default is 666.')
+parser.add_argument('--verbose_step', type = int, default = 100, help = 'Print training info every N steps, default is 100.')
+parser.add_argument('--resume', type = str, default = "false", help = 'Continue training from checkpoint or start new training, default is false.')
+parser.add_argument('--model_checkpoint', type = str, default = None, help = 'Model checkpoint path for resuming training.')
+args = parser.parse_args()
 
-model_checkpoint = model_save_path + "/model_1_215376.pt"
-if int(os.environ["RANK"]) == 0:
-    tb_writer = SummaryWriter(log_path)
-resume = False
 
-'''data'''
-train_data_path = "/lustre/grp/bitcap/wangy/rlm/data_7way/processed_4096/ms7.4096.h5"
+# load model config and training config from json file
+os.makedirs(args.model_save_path, exist_ok=True)
+config = load_config(args.config_file)
 
-'''model parameters'''
-d_kv = 64 # dimension of K(=Q), V
-n_heads = 16 # number of heads in Multi-Head Attention
-n_layers = 12 # number of Encoder of Encoder Layer
-
-#max_vocab = 130 # 5^3 + 5 
-max_vocab = 16
-kmer = 1
+'''model config'''
+model_config = config["model_config"]
+d_kv = model_config['d_kv']
+n_heads = model_config['n_heads']
+n_layers = model_config['n_layers']
+max_vocab = model_config['max_vocab']
+kmer = model_config['kmer']
 
 '''training config'''
-batch_size = 16
-
-lr_init = 1e-6
-lr_max = 1e-4 #5e-5 
-lr_min = 1e-6 #1e-7
-
-epochs = 1000
-warmup_steps = 80_000
-train_steps = 2_000_000
+training_config = config['training_config']
+batch_size = training_config['batch_size']
+lr_init = training_config['lr_init']
+lr_max = training_config['lr_max']
+lr_min = training_config['lr_min']
+epochs = training_config['epochs']
+warmup_steps = training_config['warmup_steps']
+train_steps = training_config['train_steps']
 
 '''random seed for torch'''
-seed = 666
+seed = args.random_seed
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 
@@ -77,20 +78,6 @@ def setup():
 
 def cleanup():
     dist.destroy_process_group()
-
-def init_model(model, model_checkpoint, device):
-    checkpoint = torch.load(model_checkpoint, map_location=device)
-    state_dict = checkpoint['model_state_dict']
-    #resume model
-    FSDP.set_state_dict_type(
-        model,
-        StateDictType.FULL_STATE_DICT,
-        FullStateDictConfig(rank0_only=False),
-        FullOptimStateDictConfig(rank0_only=False),
-    )
-    model.load_state_dict(state_dict)
-    return model
-
 
 def resume_checkpoint(model, optimizer, model_checkpoint, device):
     checkpoint = torch.load(model_checkpoint, map_location=device)
@@ -133,7 +120,7 @@ def save_checkpoint(model, global_rank, epoch, step, scheduler, optimizer, model
                     'optimizer_state_dict': optimizer_state_dict,
                     'step': step,
                     'lr_schedule':scheduler.state_dict()}, 
-                    model_save_path + f"/model_{epoch}_{step}.pt")
+                    os.path.join(model_save_path, f"/model_{epoch}.pt"))
 
 def train(device, step, model, scheduler, global_rank, train_dataloader, optimizer, epoch, sampler):
     loss_fn = torch.nn.CrossEntropyLoss()
@@ -158,15 +145,10 @@ def train(device, step, model, scheduler, global_rank, train_dataloader, optimiz
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         #update parameters
         optimizer.step()
-        #if global_rank == 0:
-        #    print(f"epoch {epoch}, step {step}, train_loss {loss_lm}")
-        if global_rank == 0 and step % 100 == 0:
+        
+        if global_rank == 0 and step % args.verbose_step == 0:
             print(f"epoch {epoch}, step {step}, train_loss {loss_lm}")
-            end_time = time.time()
-            step_time = round((end_time - start_time), 3)
-            tb_writer.add_scalar("train_step_time", step_time , step)
-        if global_rank == 0 and step % 10 == 0:
-            tb_writer.add_scalar("train_step_loss", loss_lm, step)
+        
         fsdp_loss[0] += loss_lm.item()
         fsdp_loss[1] += 1
         #update lr schedule
@@ -189,16 +171,17 @@ def fsdp_main():
     
     dna_tokenizer = DNATokenizer(kmer = kmer)
     dna_collator = DataCollatorForDNA(dna_tokenizer, dynamic_length=True, dynamic_length_prob=0.05)
-    train_dataset = DNADataset(dna_tokenizer, train_data_path)
+    train_dataset = DNADataset(dna_tokenizer, args.train_data)
     train_sampler = DistributedSampler(train_dataset, shuffle=True)
     train_dataloader = DataLoader(train_dataset, collate_fn=dna_collator, sampler=train_sampler, batch_size=batch_size, num_workers=8)
 
     #load model
-    model = DNALingo(max_vocab, n_heads, d_kv, n_layers)
+    model = BaselineBERT(max_vocab, n_heads, d_kv, n_layers)
 
     #get model parms number
     if global_rank == 0:
         get_param_num(model)
+    
     #wrap model
     model_auto_wrap_policy = functools.partial(
         transformer_auto_wrap_policy,
@@ -215,26 +198,16 @@ def fsdp_main():
         device_id=torch.cuda.current_device(),
         backward_prefetch = BackwardPrefetch.BACKWARD_PRE
     )
-    '''
-    if global_rank == 0:
-        print(model)
-    '''
+
     optimizer = torch.optim.AdamW(model.parameters(), betas=(0.9,0.999), eps=1e-8, lr=lr_max, weight_decay=0.01)
     scheduler1 = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=lr_init/lr_max, end_factor=1.0, total_iters=warmup_steps)
-    #scheduler2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=train_steps, eta_min=lr_min)
     scheduler2 = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=lr_min/lr_max, total_iters=train_steps)
     scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler1, scheduler2], milestones=[warmup_steps])
     
-    '''
-    if global_rank == 0:
-        print("Load model from checkpoint...")
-    model = init_model(model, model_checkpoint, device)
-    '''
-
-    if resume:
+    if args.resume.lower() == "true" and args.model_checkpoint is not None:
         if global_rank == 0:
             print("Resume model...")
-        model, optimizer, epoch_save, step_save, lr_scheduler_state = resume_checkpoint(model, optimizer, model_checkpoint, device)
+        model, optimizer, epoch_save, step_save, lr_scheduler_state = resume_checkpoint(model, optimizer, args.model_checkpoint, device)
         scheduler.load_state_dict(lr_scheduler_state)
         epoch_start = epoch_save + 1
         step_start = step_save + 1
@@ -244,14 +217,13 @@ def fsdp_main():
     
     if global_rank == 0:
         print("Start training...")
+    
     step = step_start
     for epoch in range(epoch_start, epochs):
         train_epoch_loss, step = train(device, step, model, scheduler, global_rank, train_dataloader, optimizer, epoch, train_sampler)
         if global_rank == 0:
             print(f"epoch {epoch}, train_epoch_loss {train_epoch_loss}")
-        if global_rank == 0:
-            tb_writer.add_scalar("train_epoch_loss", train_epoch_loss, epoch)
-        save_checkpoint(model, global_rank, epoch, step, scheduler, optimizer, model_save_path)
+        save_checkpoint(model, global_rank, epoch, step, scheduler, optimizer, args.model_save_path)
     
     dist.barrier()
     cleanup()

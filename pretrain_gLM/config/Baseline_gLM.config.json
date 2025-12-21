@@ -1,0 +1,18 @@
+{
+    "model_config": {
+        "d_kv": 64,
+        "n_heads": 16,
+        "n_layers": 12,
+        "max_vocab": 16,
+        "kmer": 1
+    },
+    "training_config": {
+        "batch_size": 16,
+        "lr_init": 1e-06,
+        "lr_max": 0.0001,
+        "lr_min": 1e-06,
+        "epochs": 1000,
+        "warmup_steps": 80000,
+        "train_steps": 2000000
+    }
+}

@@ -1,3 +1,4 @@
+# This script splits genomes into fixed-length sequences and filters them based on N content.
 import subprocess
 import os
 from Bio import SeqIO
@@ -8,11 +9,9 @@ import gzip
 max_seq_length = 4096
 n_ratio = 0.01
 
-raw_genome_dir = "./raw/"
-log_dir = "./log/"
-processed_dir = "./processed_" + str(max_seq_length) + "/"
-if not os.path.exists(processed_dir):
-    os.makedirs(processed_dir)
+raw_genome_dir = "../download/"
+processed_dir = "./processed_4096/"
+os.makedirs(processed_dir, exist_ok=True)
 
 
 def split_genome(input_genome):
@@ -34,19 +33,16 @@ def split_genome(input_genome):
                     if float(sub_seq.count("N")/len(sub_seq)) > n_ratio:
                         removed_seq_num += 1
                         continue
-                    
                     seq_num += 1
                     fw.write(sub_seq + "\n")
     return seq_num, removed_seq_num
 
 if __name__ == "__main__":
-    info_log = open(log_dir + "split_genome_info.log", 'w')
+    print("Splitting genomes into fixed-length sequences...")
     for file in os.listdir(raw_genome_dir):
         if not file.endswith(".fna.gz"):
             continue
         seq_num, removed_seq_num = split_genome(file)
         print("Removed " + str(removed_seq_num) + " seqs.")
-        print("Total seqs: " + str(seq_num))
-        info_log.write(file + "\t" + str(seq_num) + "\t" + str(removed_seq_num) + "\n")
-    info_log.close()
-    print("Done.")
+        print("Number of sequences: " + str(seq_num))
+    print("Done: all genomes have been processed.")
