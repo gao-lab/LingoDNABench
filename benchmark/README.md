@@ -5,7 +5,7 @@ Download the genomic language model to benchmarking
 sh models-download.sh
 ```
 ## Datasets
-<!-- GitHub Markdown文件中的HTML表格，支持合并单元格 -->
+
 <table>
   <thead>
     <tr>
@@ -45,8 +45,6 @@ sh models-download.sh
       <td>Classification</td>
       <td>https://www.biorxiv.org/content/10.1101/2024.08.16.608288v1</td>
     </tr>
-    
-    <!-- Transcription regulation -->
     <tr>
       <td rowspan="7">Transcription regulation</td>
       <td>TFBS</td>
@@ -104,7 +102,6 @@ sh models-download.sh
       <td>Classification</td>
       <td>https://academic.oup.com/nar/article/47/10/e60/5380496?login=true</td>
     </tr>
-    
     <!-- Post-transcription regulation -->
     <tr>
       <td rowspan="6">Post-transcription regulation</td>
@@ -147,7 +144,6 @@ sh models-download.sh
       <td>Classification</td>
       <td>https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1012755</td>
     </tr>
-    
     <!-- Gene expression -->
     <tr>
       <td rowspan="1">Bulk RNA-seq</td>
@@ -157,7 +153,6 @@ sh models-download.sh
       <td>Regression</td>
       <td>https://www.nature.com/articles/s41592-021-01252-x</td>
     </tr>
-    
     <!-- Variant effect prediction -->
     <tr>
       <td rowspan="4">Variant effect prediction</td>
