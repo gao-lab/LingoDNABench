@@ -40,7 +40,7 @@ def seqtopad(sequence):
             S[i,basedict[sequence[i]]]=np.float32(1)
     return np.transpose(S)
 
-for elem in ['train']:
+for elem in ['train','valid','test']:
     print(elem)
     seqs=[]
     names=[]
