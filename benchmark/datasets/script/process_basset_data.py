@@ -61,10 +61,7 @@ for elem in ['train','valid','test']:
             seq_f.write(f"{seq}\n")
     subprocess.call(f"split -d -l {split_size} {data_dir}/{feature_name}_{elem}_DNA.seq {data_dir}/{feature_name}_{elem}", shell=True)
     
-    np.save(os.path.join(data_dir,f"{feature_name}_{elem}_labels.npy"),labels)
     print("spliting...")
     """label"""
     split_data(labels,split_size,split_dir,elem,feature_name,"labels")
-    """seqs"""    
-    split_data(onehot_result,split_size,split_dir,elem,feature_name,"onehot")
     
