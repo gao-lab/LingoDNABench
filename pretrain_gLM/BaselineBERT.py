@@ -120,7 +120,7 @@ def save_checkpoint(model, global_rank, epoch, step, scheduler, optimizer, model
                     'optimizer_state_dict': optimizer_state_dict,
                     'step': step,
                     'lr_schedule':scheduler.state_dict()}, 
-                    os.path.join(model_save_path, f"/model_{epoch}.pt"))
+                    os.path.join(model_save_path, f"model_{epoch}.pt"))
 
 def train(device, step, model, scheduler, global_rank, train_dataloader, optimizer, epoch, sampler):
     loss_fn = torch.nn.CrossEntropyLoss()
@@ -130,9 +130,7 @@ def train(device, step, model, scheduler, global_rank, train_dataloader, optimiz
     
     sampler.set_epoch(epoch)
     for one_batch in train_dataloader:
-        if global_rank == 0:
-            start_time = time.time()
-        
+       
         input_ids, masked_pos, masked_tokens = map(lambda x: x.to(device), one_batch)
         
         optimizer.zero_grad()

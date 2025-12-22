@@ -17,7 +17,7 @@ def generate_random_seq(seq_len, num_seq):
     for i in tqdm.tqdm(range(num_seq)):
         seq = ''.join(random.choices('ACGT', k=seq_len))
         seq_list.append(seq)
-    seq_list = np.array(seq_list)
+    seq_list = np.array(seq_list, dtype="S" + str(seq_len))
     #contruct hdf5 file
     with h5py.File(output_file, 'w') as f:
         f.create_dataset('seq', data=seq_list, dtype="S" + str(seq_len))

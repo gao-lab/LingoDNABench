@@ -26,6 +26,7 @@ args = parser.parse_args()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"Using {device} device")
 
+config = load_config(args.config_file)
 
 '''model parameters'''
 model_config = config["model_config"]

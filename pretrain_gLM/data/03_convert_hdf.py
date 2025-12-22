@@ -1,4 +1,5 @@
 # This script converts the processed sequence files into HDF5 format for efficient storage and retrieval.
+import os
 import h5py
 import numpy as np
 
@@ -13,7 +14,7 @@ human_input_file = data_dir + "human.4k.seq"
 human_output_file = dataset_dir + "human." + str(seq_length) + ".h5"
 
 # multispecies dataset
-multi_input_file = data_dir + "multi-species.4k.seq"
+multi_input_file = data_dir + "multispecies.4k.seq"
 multi_output_file = dataset_dir + "ms." + str(seq_length) + ".h5"
 
 # chunk size for processing
