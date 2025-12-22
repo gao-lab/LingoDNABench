@@ -6,10 +6,9 @@ output_dir=sys.argv[2]
 embedding_len=int(sys.argv[3])
 layer=int(sys.argv[4])
 epoch=int(sys.argv[5])
-
+mean_mode = False
 name=input_seq.split('/')[-1].split('.')[0]
 output_file=output_dir+'/'+name+f"-embedding-layer_{layer}.npy"
-model_dir="/lustre/grp/gglab/liangyx/data/benchmark"
 
 if (os.path.exists(output_file) and os.path.getsize(output_file) != 0):
     sys.exit()
@@ -81,8 +80,7 @@ model = load_model()
 print(model)
 seq_path=input_seq
 out_path=output_file
-layer_num = -1
-mean_mode = False
+
 # get seq number
 input_seq = np.loadtxt(seq_path, dtype=str, delimiter="\t")
 seq_num = input_seq.shape[0]
@@ -108,11 +106,11 @@ with torch.autocast(device_type='cuda',dtype=torch.bfloat16):
             embedding = model(input_ids[0].cuda())
             if mean_mode:
                 # cal mean embedding, exclude CLS and SEP
-                embedding_mean = torch.mean(embedding[layer_num][:,1:1+embedding_len,:], dim=1)
+                embedding_mean = torch.mean(embedding[layer][:,1:1+embedding_len,:], dim=1)
                 output_embedding[x*batch_size : x*batch_size + embedding_mean.shape[0]] = embedding_mean.cpu().detach().numpy().astype(np.float32)
             else:
                 # exclude CLS and SEP
-                output_embedding[x*batch_size : x*batch_size + embedding[layer_num].shape[0]] = embedding[layer_num][:,1:1+embedding_len,:].cpu().detach().numpy().astype(np.float32)
+                output_embedding[x*batch_size : x*batch_size + embedding[layer].shape[0]] = embedding[layer][:,1:1+embedding_len,:].cpu().detach().numpy().astype(np.float32)
 
 
 np.save(output_file,output_embedding.astype(np.float32))
