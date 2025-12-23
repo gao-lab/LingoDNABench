@@ -1,130 +1,131 @@
-# Promoter as example
+#!/usr/bin/env bash
+set -e
 
+#######################################
+# Global config
+#######################################
 data_dir="./dataset/promoter/prom_300_tata"
 embedding_len=300
 
-### omnina
-model_name="OmniNA-220m"
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`   
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding`
-        do
-        echo "$file $dir"
-        python get-embeddings.py omnina $model_name $file $dir/$model_name $embedding_len -1
+#######################################
+# Common embedding runner
+# Arguments:
+#   $1: backend name (omnina / nt / dnabert / ...)
+#   $2: model name
+#   $3: embedding length
+#   $4: extra argument (e.g. -1 / 9)
+#   $5: file filter (grep chain)
+#######################################
+run_embeddings () {
+    local backend=$1
+    local model_name=$2
+    local emb_len=$3
+    local extra_arg=$4
+    local filter_cmd=$5
+
+    for dir in $(find "$data_dir" -mindepth 0 -maxdepth 0 -type d); do
+        out_dir="$dir/$model_name"
+        mkdir -p "$out_dir"
+
+        for file in $(find "$dir" -type f -name "*data*" | eval "$filter_cmd"); do
+            echo "$file $dir"
+            python get-embeddings.py \
+                "$backend" \
+                "$model_name" \
+                "$file" \
+                "$out_dir" \
+                "$emb_len" \
+                "$extra_arg"
+        done
     done
-done
+}
 
-### nt
-model_name="nucleotide-transformer-2.5b-multi-species"
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py nt $model_name $file $dir/$model_name $((embedding_len/6+1)) -1
-    done
-done
+#######################################
+# OmniNA
+#######################################
+run_embeddings \
+    "omnina" \
+    "OmniNA-220m" \
+    "$embedding_len" \
+    "-1" \
+    "grep -v embedding"
 
-### dnabert2
-model_name='dnabert2'
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py $model_name $model_name $file $dir/$model_name $embedding_len -1
-    done
-done
+#######################################
+# Nucleotide Transformer
+#######################################
+run_embeddings \
+    "nt" \
+    "nucleotide-transformer-2.5b-multi-species" \
+    "$((embedding_len/6+1))" \
+    "-1" \
+    "grep -v embedding"
 
-### dnabert
-model_name='DNA_bert_3'
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py dnabert $model_name $file $dir/$model_name $((embedding_len-3+1)) -1
-    done
-done
+#######################################
+# DNABERT2
+#######################################
+run_embeddings \
+    "dnabert2" \
+    "dnabert2" \
+    "$embedding_len" \
+    "-1" \
+    "grep -v embedding"
 
+#######################################
+# DNABERT
+#######################################
+run_embeddings \
+    "dnabert" \
+    "DNA_bert_3" \
+    "$((embedding_len-3+1))" \
+    "-1" \
+    "grep -v embedding"
 
-model_name=hyenadna-large-1m-seqlen-hf
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py hyenadna $model_name $file $dir/$model_name $embedding_len 9
-    done
-done
+#######################################
+# HyenaDNA
+#######################################
+run_embeddings \
+    "hyenadna" \
+    "hyenadna-large-1m-seqlen-hf" \
+    "$embedding_len" \
+    "9" \
+    "grep -v embedding"
 
+#######################################
+# DeepGene
+#######################################
+run_embeddings \
+    "deepgene" \
+    "deepgene" \
+    "$embedding_len" \
+    "-1" \
+    "grep -v embedding | grep -v part"
 
-model_name='deepgene'
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding|grep -v part` 
-    do
-        echo "$file $dir"
-        python get-embeddings.py deepgene $model_name $file $dir/$model_name $embedding_len -1
-    done
-done
+#######################################
+# Caduceus
+#######################################
+run_embeddings \
+    "caduceus" \
+    "caduceus-ps_seqlen-131k_d_model-256_n_layer-16" \
+    "$embedding_len" \
+    "-1" \
+    "grep -v embedding | grep -v part | grep -v enformer"
 
+#######################################
+# LucaOne
+#######################################
+run_embeddings \
+    "lucaone" \
+    "lucaone" \
+    "$embedding_len" \
+    "-1" \
+    "grep -v embedding | grep -v part"
 
-model_name="caduceus-ps_seqlen-131k_d_model-256_n_layer-16"
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding |grep -v part|grep -v enformer` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py caduceus $model_name $file $dir/$model_name $embedding_len -1
-    done
-done
-
-model_name='lucaone'
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding|grep -v part` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py lucaone $model_name $file $dir/$model_name $embedding_len -1
-    done
-done
-
-
-
-model_name=GENERator-eukaryote-3b-base
-for dir in `find $data_dir -mindepth 0 -maxdepth 0 -type d`  
-do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir $dir/$model_name
-    fi
-    for file in `find $dir -type f -name "*data*"|grep -v embedding|grep -v part` 
-        do
-        echo "$file $dir"
-        python get-embeddings.py GEN $model_name $file $dir/$model_name $((embedding_len/6+1)) -1
-    done
-done
+#######################################
+# GENERator
+#######################################
+run_embeddings \
+    "GEN" \
+    "GENERator-eukaryote-3b-base" \
+    "$((embedding_len/6+1))" \
+    "-1" \
+    "grep -v embedding | grep -v part"

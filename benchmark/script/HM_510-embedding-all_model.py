@@ -28,11 +28,11 @@ random_seed=42
 model_name=sys.argv[1]
 layer=int(sys.argv[2])
 
-embedding_len=510
-model_dim=int(sys.argv[3])
-dataset_dir=sys.argv[4]
-checkpoint_dir=sys.argv[5]
-eval_dir=sys.argv[6]
+embedding_len=int(sys.argv[3])
+model_dim=int(sys.argv[4])
+dataset_dir=sys.argv[5]
+checkpoint_dir=sys.argv[6]
+eval_dir=sys.argv[7]
 
 def file_to_records(filename):
     return tf.data.TFRecordDataset(filename, compression_type='')

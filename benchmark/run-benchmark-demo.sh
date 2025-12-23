@@ -1,4 +1,4 @@
-model_name=DNABERT-2-117M
+model_name=nucleotide-transformer-2.5b-multi-species
 # default applications
 data_dir="./dataset/promoter/prom_300_tata"
 layer=-1 # the last layer
@@ -36,9 +36,9 @@ python variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
 
 
 #TFBS
-python TFBS_510-embedding-all_model.py 
+python TFBS_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species -1 $((510 / 6 + 1 )) 2560 ../dataset/TFBS ../dataset/TFBS/checkpoint ../dataset/TFBS/eval 
 #DNA accessibility
-python CA_510-embedding-all_model.py
+python CA_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species -1 $((510 / 6 + 1 )) 2560 ../dataset/DNA_accessibility ../dataset/DNA_accessibility/checkpoint ../dataset/DNA_accessibility/eval 
 #Histone modification
-python HM_510-embedding-all_model.py
+python HM_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species -1 $((510 / 6 + 1 )) 2560 ../dataset/HM ../dataset/HM/checkpoint ../dataset/HM/eval 
 
