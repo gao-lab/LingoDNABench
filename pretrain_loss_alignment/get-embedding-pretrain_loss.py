@@ -1,13 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-Refactored version of get-embedding-pretrain_loss.py
-
-- Logic strictly preserved
-- Structure optimized
-- Readability & maintainability improved
-"""
 
 # ============================================================
 # Imports & Environment

@@ -28,20 +28,20 @@ np.random.seed(42)
 # ===============================
 # CLI arguments
 # ===============================
-
-model_type = sys.argv[1]
-model_name = sys.argv[2]
-input_seq = sys.argv[3]
-output_dir = sys.argv[4]
-embedding_len = int(sys.argv[5])
-layer = int(sys.argv[6])
+model_dir = sys.argv[1]
+model_type = sys.argv[2]
+model_name = sys.argv[3]
+input_seq = sys.argv[4]
+output_dir = sys.argv[5]
+embedding_len = int(sys.argv[6])
+layer = int(sys.argv[7])
 
 name = os.path.basename(input_seq).split(".")[0]
 output_file = os.path.join(
     output_dir, f"{name}-embedding-layer_{layer}.npy"
 )
 
-model_dir = "./benchmark_models"
+
 batch_size = 4
 
 if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
@@ -245,42 +245,63 @@ def run_omnina():
 
 
 def run_bert_series():
-    sys.path.append("../pretrain_downstream_alignment/BERT-155M-Series")
-
-    from dpb_bert.data import DNADataset, DNATokenizer
-    from dpb_bert.model import DNALingo
-
+    sys.path.append('../pretrain_gLM')
+    from BERT.data import  DNADataset, DNATokenizer
+    from BERT.model import BaselineBERT
+    from BERT.utils import load_config
+    config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
     if model_name == "RandomWeight":
-        model_checkpoint = "../pretrain_downstream_alignment/BERT-155M-Series/RandomWeights/model_init_666.pt"
+        model_checkpoint = "../pretrain_gLM/checkpoints/RandomWeight/model_init_666.pt"
     elif model_name == "RandomSeq":
-        model_checkpoint = "../pretrain_downstream_alignment/BERT-155M-Series/RandomSeq/model_0_43637.pt"
+        model_checkpoint = "../pretrain_gLM/checkpoints/RandomSeq/model_0_43637.pt"
     elif model_name == "MS7-4K-8-K1":
-        model_checkpoint = "../pretrain_downstream_alignment/BERT-155M-Series/MS7-4K-8-K1/model_8_711981.pt"
+        model_checkpoint = "../pretrain_gLM/checkpoints/MS7-4K-8-K1/model_8_711981.pt"
     elif model_name == "H-4K-13-K1":
-        model_checkpoint = "../pretrain_downstream_alignment/BERT-155M-Series/H-4K-13-K1/model_13_610919.pt"
+        model_checkpoint = "../pretrain_gLM/checkpoints/H-4K-13-K1/model_13_610919.pt"
     else:
         raise ValueError(model_name)
-
-    d_kv = 64
-    n_heads = 16
-    n_layers = 12
+    model_config = config["model_config"]
+    d_kv = model_config['d_kv']
+    n_heads = model_config['n_heads']
+    n_layers = model_config['n_layers']
+    max_vocab = model_config['max_vocab']
     d_model = n_heads * d_kv
+    kmer = model_config['kmer']
 
-    model = DNALingo(16, n_heads, d_kv, n_layers, eval_mode=True).to(device)
-    ckpt = torch.load(model_checkpoint, map_location=device)
-    model.load_state_dict(ckpt["model_state_dict"], strict=False)
-    model.eval()
+    def load_model():
+        # init model
+        print("Initializing model and loading checkpoint...")
 
-    tokenizer = DNATokenizer(kmer=1)
-    dataset = DNADataset(tokenizer, input_seq, data_type="seq")
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        model = BaselineBERT(max_vocab, n_heads, d_kv, n_layers, eval_mode=True)
+        model.to(device)
+        
+        # loading checkpoint
+        checkpoint = torch.load(model_checkpoint, map_location=device)
+        state_dict = checkpoint['model_state_dict']
+        
+        # remove unused keys
+        model_state = model.state_dict()
+        state_dict = {k: v for k, v in state_dict.items() if k in model_state}
+        model_state.update(state_dict)
+        model.load_state_dict(model_state)
+        
+        return model
+    
+    
 
+    dna_tokenizer = DNATokenizer(kmer = kmer)
+    # default: no padding
     seqs = np.loadtxt(input_seq, dtype=str)
+    seq_dataset = DNADataset(dna_tokenizer, input_seq, data_type="seq", eval_mode=True)
+    seq_data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+    model = load_model()
+    model.eval().cuda()
+    
     result = np.zeros((len(seqs), embedding_len, d_model), dtype=np.float32)
 
     with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
         with torch.no_grad():
-            for i, batch in enumerate(loader):
+            for i, batch in enumerate(seq_data_loader):
                 emb = model(batch[0].cuda())[layer][:, 1:1 + embedding_len, :]
                 result[
                     i * batch_size : i * batch_size + emb.shape[0]
@@ -492,22 +513,16 @@ def run_generator():
 
     return result
 
+
 def run_evo2():
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-
+    from evo2 import Evo2
     model_path = f"{model_dir}/{model_name}"
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-    ).to(device).eval()
-
+    model = Evo2('evo2_7b',local_path=f"{model_path}.pt")
+    layer_name=layer# 7b
+    model=model.cuda()
+    model=model.eval()
     seqs = np.loadtxt(input_seq, dtype=str)
-    hidden_size = model.config.hidden_size
+    hidden_size = 4096
     token_len = embedding_len
 
     result = np.zeros(
@@ -515,30 +530,24 @@ def run_evo2():
         dtype=np.float32,
     )
 
-    tokenizer.padding_side = "right"
-
     with torch.no_grad():
         for i, seq in enumerate(seqs):
-            inputs = tokenizer(
-                [seq],
-                add_special_tokens=True,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=model.config.max_position_embeddings,
-            )
-            inputs = {k: v.to(device) for k, v in inputs.items()}
+            input_ids = torch.tensor(
+                model.tokenizer.tokenize(seq),
+                dtype=torch.int,
+            ).unsqueeze(0).to('cuda:0')
 
-            outputs = model(**inputs, output_hidden_states=True)
-            hs = outputs.hidden_states
+            outputs,embeddings = model(input_ids, return_embeddings=True, layer_names=[layer_name])
+            
             result[i, :, :] = (
-                hs[layer][0, 1:1 + token_len, :]
+                embeddings[layer_name][0, 1:1 + token_len, :]
                 .detach()
                 .cpu()
                 .numpy()
             )
 
     return result
+
 
 def run_lucaone_hf():
     import numpy as np
