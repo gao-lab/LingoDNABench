@@ -33,35 +33,35 @@ layer=-1 # the last layer
 random_seed=42
 output_dim=1
 regression=False #classification application
-python benchmark-default-tasks.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
 ```
 
 ### Exon PSI applications
 ```
-data_dir="./dataset/Exon_PSI"
+data_dir="./datasets/Exon_PSI"
 layer=-1 
 model_name=nucleotide-transformer-2.5b-multi-species
 random_seed=42
 output_dim=56
 regression=True 
-python benchmark-Exon_PSI.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
+python scirpt/benchmark-Exon_PSI.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
 ```
 
 ### Gene expression level prediction applications
 ```
-data_dir="./dataset/exp"
+data_dir="./datasets/exp"
 model_name=nucleotide-transformer-2.5b-multi-species
 layer=-1
 random_seed=42
 output_dim=53
 regression=True
-python benchmark-exp.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
+python scirpt/benchmark-exp.py  $model_name ${data_dir} $layer  $random_seed $output_dim $regression
 ```
 
 ### Promoter-promoter/Enhancer-promoter interaction applications
 ```
 model_name=nucleotide-transformer-2.5b-multi-species
-data_dir="./dataset/PPI_EPI/tB/P-P"
+data_dir="./datasets/PPI_EPI/tB/P-P"
 layer=-1
 random_seed=42
 output_dim=1
@@ -75,7 +75,7 @@ model_name=nucleotide-transformer-2.5b-multi-species
 layer=-1
 embedding_len=510
 model_dim=2560
-dataset_dir=../datasets/TFBS
+dataset_dir=./datasets/TFBS
 checkpoint_dir=../datasets/TFBS/checkpoint
 eval_dir=../datasets/TFBS/eval 
 python TFBS_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species -1 $((embedding_len / 6 + 1 )) $model_dim $data_dir $checkpoint_dir $eval_dir
@@ -84,7 +84,7 @@ python TFBS_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species
 
 ### Variant effect prediction
 ```
-data_dir=./variant/var_disease_noncoding
+data_dir=.datasets/variant/var_disease_noncoding
 model_name=nucleotide-transformer-2.5b-multi-species
 layer=-1
 python variant_effect_prediction-zero-shot.py $data_dir $model_name $layer

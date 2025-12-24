@@ -57,52 +57,46 @@ def find_files_with_prefix(directory, prefix):
 # Model / Tokenizer Setup
 # ============================================================
 
-sys.path.append("./BERT-155M-Series")
-from dpb_bert.data import DNADataset, DNATokenizer
-from dpb_bert.model import DNALingo
-
-model_dir = "./BERT-155M-Series/MS7-4K-8-K1"
+sys.path.append('../pretrain_gLM')
+from BERT.data import  DNADataset, DNATokenizer
+from BERT.model import BaselineBERT
+from BERT.utils import load_config
+config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
+model_dir = "../pretrain_gLM/checkpoints/MS7-4K-8-K1"
 model_version = find_files_with_prefix(
     model_dir, f"model_{epoch}_"
 )[0]
 model_checkpoint = os.path.join(model_dir, model_version)
 
-# model hyper-parameters (unchanged)
-d_kv = 64
-n_heads = 16
-n_layers = 12
-max_vocab = 16
+model_config = config["model_config"]
+d_kv = model_config['d_kv']
+n_heads = model_config['n_heads']
+n_layers = model_config['n_layers']
+max_vocab = model_config['max_vocab']
 d_model = n_heads * d_kv
+kmer = model_config['kmer']
 
 # ============================================================
 # Model Loader
 # ============================================================
 
-def load_model(checkpoint_path):
-    """
-    Initialize DNALingo model and load checkpoint.
-    Logic identical to original script.
-    """
+def load_model():
+    # init model
     print("Initializing model and loading checkpoint...")
 
-    model = DNALingo(
-        max_vocab=max_vocab,
-        n_heads=n_heads,
-        d_kv=d_kv,
-        n_layers=n_layers,
-        eval_mode=True,
-    ).to(device)
-
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    state_dict = checkpoint["model_state_dict"]
-
+    model = BaselineBERT(max_vocab, n_heads, d_kv, n_layers, eval_mode=True)
+    model.to(device)
+    
+    # loading checkpoint
+    checkpoint = torch.load(model_checkpoint, map_location=device)
+    state_dict = checkpoint['model_state_dict']
+    
+    # remove unused keys
     model_state = model.state_dict()
-    filtered_state = {
-        k: v for k, v in state_dict.items() if k in model_state
-    }
-    model_state.update(filtered_state)
+    state_dict = {k: v for k, v in state_dict.items() if k in model_state}
+    model_state.update(state_dict)
     model.load_state_dict(model_state)
-
+    
     return model
 
 # ============================================================
