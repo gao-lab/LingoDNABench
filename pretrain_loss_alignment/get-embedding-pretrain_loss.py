@@ -1,3 +1,9 @@
+# ============================================================
+# To evaluate the how the pretrain loss correlated with downstream
+# applications performance metrics. (This idea was inspired by https://doi.org/10.1101/2024.02.05.578959)
+# ============================================================
+
+
 
 # ============================================================
 # Imports & Environment
@@ -112,7 +118,7 @@ def build_dataloader(seq_path):
     print(seq_num)
 
     tokenizer = DNATokenizer(kmer=kmer)
-    dataset = DNADataset(tokenizer, seq_path, data_type="seq")
+    dataset = DNADataset(tokenizer, seq_path, data_type="seq",eval_mode=True)
 
     dataloader = DataLoader(
         dataset,
@@ -179,7 +185,7 @@ def extract_embeddings(model, dataloader, output_buffer):
 # ============================================================
 
 def main():
-    model = load_model(model_checkpoint)
+    model = load_model()
     print(model)
 
     dataloader, seq_num = build_dataloader(input_seq)
