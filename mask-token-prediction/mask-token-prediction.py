@@ -84,7 +84,7 @@ kmer = 1
 if model_type=="human-genome":
     model_checkpoint = "../pretrain_gLM/checkpoints/H-4K-13-K1/model_13_610919.pt"
 if model_type=="RandomWeight":
-    model_checkpoint = "../pretrain_gLM/checkpoints/RandomWeights/model_init_666.pt"
+    model_checkpoint = "../pretrain_gLM/checkpoints/RandomWeight/model_init_666.pt"
 if model_type=="multi-species":
     model_checkpoint = "../pretrain_gLM/checkpoints/MS7-4K-8-K1/model_8_711981.pt"
 if model_type=="RandomSeq":
