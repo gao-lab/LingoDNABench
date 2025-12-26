@@ -106,7 +106,7 @@
       <td>https://academic.oup.com/nar/article/47/10/e60/5380496?login=true</td>
     </tr>
     <tr>
-      <td rowspan="6">Post-transcription regulation</td>
+      <td rowspan="5">Post-transcription regulation</td>
       <td>Polyadenylation signals</td>
       <td>600</td>
       <td>AATAAA: 22,602; all: 41,864</td>
