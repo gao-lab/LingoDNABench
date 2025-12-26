@@ -81,14 +81,14 @@ d_model = n_heads * d_kv
 
 '''tokenization'''
 kmer = 1
-if model_type=="human":
-    model_checkpoint = "../pretrain_loss_alignment/BERT-155M-Series/H-4K-13-K1/model_13_610919.pt"
-if model_type=="random":
-    model_checkpoint = "../pretrain_loss_alignment/BERT-155M-Series/RandomWeights/model_init_666.pt"
-if model_type=="MS7":
-    model_checkpoint = "../pretrain_loss_alignment/BERT-155M-Series/MS7-4K-8-K1/model_8_711981.pt"
-if model_type=="randomseq":
-    model_checkpoint = "../pretrain_loss_alignment/BERT-155M-Series/RandomSeq_V2/model_0_43637.pt"
+if model_type=="human-genome":
+    model_checkpoint = "../pretrain_gLM/checkpoints/H-4K-13-K1/model_13_610919.pt"
+if model_type=="RandomWeight":
+    model_checkpoint = "../pretrain_gLM/checkpoints/RandomWeights/model_init_666.pt"
+if model_type=="multi-species":
+    model_checkpoint = "../pretrain_gLM/checkpoints/MS7-4K-8-K1/model_8_711981.pt"
+if model_type=="RandomSeq":
+    model_checkpoint = "../pretrain_gLM/checkpoints/RandomSeq/model_0_43637.pt"
 
 def load_model():
     # init model
