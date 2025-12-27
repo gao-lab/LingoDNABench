@@ -220,7 +220,7 @@ The files train/dev/test_data_0.txtand train/dev/test_data_1.txtcontain DNA sequ
 Given the large size of the dataset, the embeddings are converted into the TFRecord format for training. This process involves splitting the data into appropriately sized chunks(25k sequence per file), storing them as TFRecords, and subsequently training them through a TensorFlow pipeline.
 
 ```
-sh 01_process_basset_data.sh
+sh 01_process_basset_data.sh TFBS ./TFBS
 python 02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
 model_name=DNABERT-2
 layer=-1
