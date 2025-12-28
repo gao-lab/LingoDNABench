@@ -3,20 +3,58 @@ If the pre-training stage significantly benefits genomic applications, we expect
 ### Specify a checkpoint from a pre-training epoch and extract the corresponding sequence embeddings
 Demonstration using the Proximal TATA-promoter dataset:
 ```
-data_dir="../benchmark/datasets/promoter/prom_300_tata"
-epoch=0
-layer=-1
-model_name="MS7-4K-8-K1-${epoch}"
+#!/bin/bash
 
-for dir in $(find "$data_dir" -mindepth 0 -maxdepth 0 -type d); do
-    if [ ! -d "$dir/$model_name" ]; then
-        mkdir "$dir/$model_name"
+# ========================================================
+# Function: run_embedding_extraction
+# Parameters:
+#   $1: data_dir      dataset directory
+#   $2: epoch         the specified epoch of pretrain checkpoint
+#   $3: layer         embedding layer
+#   $4: embedding_len the length of input embedding
+# ========================================================
+run_embedding_extraction() {
+    local data_dir="$1"
+    local epoch="$2"
+    local layer="$3"
+    local embedding_len="$4"
+    
+    local model_name="MS7-4K-8-K1-${epoch}"
+    if [ ! -d "$data_dir" ]; then
+        echo "Error: Directory $data_dir does not exist."
+        return 1
     fi
-    for file in $(find "$dir" -type f -name "*data*"); do
-        echo "$file $dir"
-        python get-embedding-pretrain_loss.py "$file" "$dir/$model_name" $embedding_len $layer $epoch
+    find "$data_dir" -mindepth 0 -maxdepth 0 -type d | while read -r dir; do
+        
+        local output_dir="$dir/$model_name"
+        
+        
+        if [ ! -d "$output_dir" ]; then
+            mkdir -p "$output_dir"
+        fi
+
+        find "$dir" -maxdepth 1 -type f -name "*data*" | while read -r file; do
+            echo "Processing: $file in $dir"
+            python get-embedding-pretrain_loss.py \
+                "$file" \
+                "$output_dir" \
+                "$embedding_len" \
+                "$layer" \
+                "$epoch"
+        done
     done
-done
+}
+
+# =========================
+# Usage example
+# =========================
+
+DATA_DIR="../benchmark/datasets/promoter/prom_300_tata"
+EPOCH=0
+LAYER=-1
+EMBED_LEN=300
+
+run_embedding_extraction "$DATA_DIR" "$EPOCH" "$LAYER" 
 ```
 
 ### Apply embedding to genomic applications
