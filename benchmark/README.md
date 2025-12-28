@@ -1,5 +1,23 @@
 # Benchmark
 ## Genomic language model preparation
+
+
+| **Model**          | **Pretraining Data**                             | **Model Architecture** | **Tokenization Strategy** | **Pretraining Objectives** | **Number of Parameters** |
+| ------------------ | ------------------------------------------------ | ---------------------- | ------------------------- | -------------------------- | ------------------------ |
+| **Caduceus-ps**   | Human genome                                     | Mamba                  | 1-mer                     | MLM                        | 1.9M                     |
+| **HyenaDNA-1M**   | Human genome                                     | Hyena                  | 1-mer                     | CLM                        | 6.6M                     |
+| **DeepGene**      | Human pan-genome                                 | Transformer            | BPE                       | MLM                        | 85M                      |
+| **GPN-MSA**       | MSA from 100 vertebrates                         | Transformer            | 1-mer                     | MLM                        | 86M                      |
+| **DNABERT-3mer**  | Human genome                                     | Transformer            | Overlapped 3-mer          | MLM                        | 89M                      |
+| **DNABERT-2**     | 135 species genomes                              | Transformer            | BPE                       | MLM                        | 117M                     |
+| **OmniNA-220M**   | 172 species genomes                              | Transformer (LLaMA)    | BPE                       | CLM                        | 220M                     |
+| **LucaOne**       | DNA, RNA, protein sequences from 169,861 species | Transformer            | 1-mer                     | MLM                        | 1.8B                     |
+| **NT-2.5B-MS**   | 850 species genomes                              | Transformer            | Non-overlapped 6-mer      | MLM                        | 2.5B                     |
+| **GENERator-3B** | Multi-species genomes                            | Transformer            | Non-overlapped 6-mer      | CLM                        | 3B                       |
+| **Evo2-7B**      | Genome sequences from 128M species                                           | SSM                    | 1-mer                     | CLM                        | 7B                       |
+
+
+
 Download the genomic language model to benchmarking
 ```
 sh models-download.sh ./models
