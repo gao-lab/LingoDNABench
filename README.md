@@ -50,3 +50,13 @@ Please refer to the table in `benchmark/datasets/README.md` for detailed task in
 ### A Mutual Information Perspective
 
 * **Different mutual information structure in genome region:** gLM show significantly different performance in predicting mask token in different genome region. (see `pretrain_analysis/mask_token_prediction`)
+
+
+## Repository Structure
+
+```text
+LingoDNABench/
+├── benchmark/      # datasets and evaluation pipelines
+├── pretrain_gLM/       # pretraining scripts or configs
+└── pretrain_analysis/       # pretrain–downstream analysis
+```
