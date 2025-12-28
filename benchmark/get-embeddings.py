@@ -340,11 +340,11 @@ def run_dnabert():
     return result
 
 def run_deepgene():
-    sys.path.append("/lustre/grp/gglab/liangyx/tools/DeepGene-main/PanGeneGraphTrans")
+    sys.path.append(f"{model_dir}/DeepGene-main/PanGeneGraphTrans")
     from modeling_roformer import RoFormerForMaskedLM
     import tokenizers
 
-    param_file = "/lustre/grp/gglab/liangyx/tools/DeepGene-main/model/pretrain_params_epoch_20"
+    param_file = f"{model_dir}/DeepGene-main/model/pretrain_params_epoch_20"
     model = RoFormerForMaskedLM.from_pretrained(param_file).to(device).eval()
 
     # 原始 graph dataset 构造逻辑
@@ -354,7 +354,7 @@ def run_deepgene():
         from tokenizers import Tokenizer
         graphs = []
         tokenizer = Tokenizer.from_file(
-            "/lustre/grp/gglab/liangyx/tools/DeepGene-main/data/vocab/tokenizer.json"
+            f"{model_dir}/DeepGene-main/data/vocab/tokenizer.json"
         )
         with open(input_seq) as f:
             for line in f:
@@ -376,39 +376,6 @@ def run_deepgene():
             g = {k: v.unsqueeze(0).to(device) for k, v in g.items()}
             hs = model(**g, output_hidden_states=True)["hidden_states"]
             result[i] = hs[layer][0, :embedding_len, :].cpu().numpy()
-
-    return result
-
-def run_lucaone():
-    sys.path.extend([
-        "/lustre/grp/gglab/liangyx/tools/LucaOneApp-master",
-        "/lustre/grp/gglab/liangyx/tools/LucaOneApp-master/algorithms",
-    ])
-
-    from algorithms.llm.lucagplm.v2_0.lucaone_gplm import LucaGPLM
-    from algorithms.llm.lucagplm.v2_0.lucaone_gplm_config import LucaGPLMConfig
-    from algorithms.llm.lucagplm.v2_0.alphabet import Alphabet
-
-    model_dirpath = "/lustre/grp/gglab/liangyx/tools/LucaOne"
-    config = LucaGPLMConfig.from_json_file(
-        os.path.join(model_dirpath, "config.json")
-    )
-    tokenizer = Alphabet.from_predefined("gene_prot")
-
-    model = LucaGPLM(config).to(device).eval()
-    model.load_state_dict(
-        torch.load(os.path.join(model_dirpath, "pytorch.pth"), map_location="cpu"),
-        strict=False,
-    )
-
-    seqs = np.loadtxt(input_seq, dtype=str)
-    result = np.zeros((len(seqs), embedding_len, 2560))
-
-    with torch.no_grad():
-        for i, seq in enumerate(seqs):
-            ids = torch.tensor(tokenizer.encode(seq), device=device).unsqueeze(0)
-            hs = model(input_ids=ids, output_hidden_states=True)["hidden_states"]
-            result[i] = hs[layer][0, 1:1 + embedding_len, :].cpu().numpy()
 
     return result
 

@@ -63,12 +63,12 @@ def find_files_with_prefix(directory, prefix):
 # Model / Tokenizer Setup
 # ============================================================
 
-sys.path.append('../pretrain_gLM')
+sys.path.append('../../pretrain_gLM')
 from BERT.data import  DNADataset, DNATokenizer
 from BERT.model import BaselineBERT
 from BERT.utils import load_config
-config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
-model_dir = "../pretrain_gLM/checkpoints/MS7-4K-8-K1"
+config = load_config("../../pretrain_gLM/config/Baseline_gLM.config.json")
+model_dir = "../../pretrain_gLM/checkpoints/MS7-4K-8-K1"
 model_version = find_files_with_prefix(
     model_dir, f"model_{epoch}_"
 )[0]
