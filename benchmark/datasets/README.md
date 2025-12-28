@@ -220,22 +220,33 @@ The files train/dev/test_data_0.txtand train/dev/test_data_1.txtcontain DNA sequ
 Given the large size of the dataset, the embeddings are converted into the TFRecord format for training. This process involves splitting the data into appropriately sized chunks(25k sequence per file), storing them as TFRecords, and subsequently training them through a TensorFlow pipeline.
 
 ```
-sh 01_process_basset_data.sh TFBS ./TFBS
-python 02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
-model_name=DNABERT-2
+# sh ./script/01_process_basset_data.sh feature_name input_dir output_dir blacklist_file reference_genome
+sh ./script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../../data/hg38-blacklist.v2.bed ../../data/hg38-genome.fa
+# python ./script/02_process_basset_data.py feature_name input_dir output_dir output_dim split_size
+python ./script/02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
+
+# Extract embedding and write it into tfrecords
+model_name=nucleotide-transformer-2.5b-multi-species
+model_type
 layer=-1
 input_dir=./datasets/TFBS
+feature_name=TFBS
+mkdir ${input_dir}/${model_name}
+output_dir=${input_dir}/${model_name}
 for idx in {0..57}
 do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
 python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
 done
 for idx in {0..11}
 do
-python 03_embed2tfr.py $idx valid TFBS $model_name $layer $input_dir
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
 done
 for idx in {0..14}
 do
-python 03_embed2tfr.py $idx test TFBS $model_name $layer $input_dir
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
 done
 ```
 
