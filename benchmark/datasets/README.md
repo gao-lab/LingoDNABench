@@ -204,41 +204,53 @@
 
 ## Data Precessing
 ### Default setting
-The file train/dev/test_data_0.txtcontains DNA sequences. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file train/dev/test_label.txtcontains the corresponding labels, which are used for model training.
+The file `train/dev/test_data_0.txt` contains DNA sequences. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file `train/dev/test_label.txt` contains the corresponding labels, which are used for model training.
+
 ### Expression level prediction
-The file train/dev/test_data_0.txtcontains DNA sequences. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file train/dev/test_target.npycontains the corresponding labels (each record corresponds to 53 continuous values), which are used for model training.
+The file `train/dev/test_data_0.txt` contains DNA sequences. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file `train/dev/test_target.npy` contains the corresponding labels (each record corresponds to 53 continuous values), which are used for model training.
 
 
 ### Exon PSI prediction
-The files train/dev/test_data_0.txtand train/dev/test_data_1.txtcontain DNA sequences. This is a dual-sequence input task. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file train/dev/test_target.npycontains the corresponding labels (each record corresponds to 53 continuous values), which are used for model training.
+The files  `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt` contain DNA sequences. This is a dual-sequence input task. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file `train/dev/test_target.npy` contains the corresponding labels (each record corresponds to 56 continuous values), which are used for model training.
 
 
 ### PPI-EPI(Promoter-promoter/Enhancer-promoter interaction) prediction
-The files train/dev/test_data_0.txtand train/dev/test_data_1.txtcontain DNA sequences. However, due to the large volume of data, it can be split into multiple files and then read as a streaming dataset during training. (The ../scripts/benchmark-PPI_EPI.pyscript accepts .h5files and is configured to split the data into smaller files, each containing 5000 records.)
+The files `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt` contain DNA sequences. However, due to the large volume of data, it can be split into multiple files and then read as a streaming dataset during training. (The `../scripts/benchmark-PPI_EPI.py` script accepts .h5 files and is configured to split the data into smaller files, each containing 5000 records.)
 
 ### TFBS/DNA accessibility/Histone modification
 Given the large size of the dataset, the embeddings are converted into the TFRecord format for training. This process involves splitting the data into appropriately sized chunks(25k sequence per file), storing them as TFRecords, and subsequently training them through a TensorFlow pipeline.
 
 ```
-sh 01_process_basset_data.sh TFBS ./TFBS
-python 02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
-model_name=DNABERT-2
+# sh ./script/01_process_basset_data.sh feature_name input_dir output_dir blacklist_file reference_genome
+sh ./script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../../data/hg38-blacklist.v2.bed ../../data/hg38-genome.fa
+# python ./script/02_process_basset_data.py feature_name input_dir output_dir output_dim split_size
+python ./script/02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
+
+# Extract embedding and write it into tfrecords
+model_name=nucleotide-transformer-2.5b-multi-species
+model_type
 layer=-1
 input_dir=./datasets/TFBS
+feature_name=TFBS
+mkdir ${input_dir}/${model_name}
+output_dir=${input_dir}/${model_name}
 for idx in {0..57}
 do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
 python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
 done
 for idx in {0..11}
 do
-python 03_embed2tfr.py $idx valid TFBS $model_name $layer $input_dir
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
 done
 for idx in {0..14}
 do
-python 03_embed2tfr.py $idx test TFBS $model_name $layer $input_dir
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
 done
 ```
 
 ### Variant effect prediction
-The files train/dev/test.vcfare VCF files for mutation sites. The files train/dev/test_data_0.txtand train/dev/test_data_1.txtcontain DNA sequences (both files contain sequences centered on the mutation site, totaling 512 bp. data_0contains the pre-mutation sequence, and data_1contains the post-mutation sequence). The file train/dev/test_label.txtcontains the corresponding labels. For zero-shot evaluation, the training, development, and test datasets can be merged directly. The distinction provided here enables potential attempts at adapter tuning.
+The files `train/dev/test.vcf` are VCF files for mutation sites. The files `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt` contain DNA sequences (both files contain sequences centered on the mutation site, totaling 512 bp. `data_0` contains the pre-mutation sequence, and `data_1` contains the post-mutation sequence). The file `train/dev/test_label.txt` contains the corresponding labels. For zero-shot evaluation, the training, development, and test datasets can be merged directly. The distinction provided here enables potential attempts at adapter tuning.
 
