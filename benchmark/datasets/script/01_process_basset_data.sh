@@ -3,9 +3,11 @@
 
 feature_name=$1
 data_dir=$2
+blacklist_dir=$3
+ref_genome=$4
 
 
-bedtools intersect -wa -a ${data_dir}/${feature_name}.bed -b ../../../data/hg38-blacklist.v2.bed > ${data_dir}/${feature_name}_blacklist.bed
+bedtools intersect -wa -a ${data_dir}/${feature_name}.bed -b $blacklist_dir > ${data_dir}/${feature_name}_blacklist.bed
 touch ${data_dir}/${feature_name}_trim.bed
 grep -vf ${data_dir}/${feature_name}_blacklist.bed ${data_dir}/$feature_name.bed > ${data_dir}/${feature_name}_trim.bed
 
@@ -19,6 +21,6 @@ awk '{if($1 !="chr1" && $1 !="chr2" && $1 !="chr4" && $1 !="chr8" && $1 !="chr9"
 
 
 
-for elem in train valid test; do bedtools getfasta -fi ../../../data/GRCh38.primary_assembly.genome.fa -bed ${data_dir}/${feature_name}_${elem}.bed -name -fo ${data_dir}/${feature_name}_${elem}.fasta; done
+for elem in train valid test; do bedtools getfasta -fi $ref_genome -bed ${data_dir}/${feature_name}_${elem}.bed -name -fo ${data_dir}/${feature_name}_${elem}.fasta; done
 
 
