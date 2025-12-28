@@ -5,10 +5,6 @@
 
 **Canonical pretraining paradigms constrain the capacity of genomic language models to decode regulatory code**
 
----
-
-## What is LingoDNABench?
-
 LingoDNABench was developed to address a fundamental yet underexplored question:
 
 > **Does canonical Masked Language Model (MLM) pretraining truly equip genomic language models (gLMs) with the ability to decode complex regulatory codes?**
