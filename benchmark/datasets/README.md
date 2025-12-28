@@ -222,7 +222,7 @@ Given the large size of the dataset, the embeddings are converted into the TFRec
 
 ```
 # sh ./script/01_process_basset_data.sh feature_name input_dir output_dir blacklist_file reference_genome
-sh ./script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../../data/hg38-blacklist.v2.bed ../../data/hg38-genome.fa
+sh ./script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../data/hg38-blacklist.v2.bed ../data/hg38-genome.fa
 # python ./script/02_process_basset_data.py feature_name input_dir output_dir output_dim split_size
 python ./script/02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
 
