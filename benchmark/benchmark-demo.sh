@@ -374,5 +374,87 @@ output_dim=1
 regression=False 
 python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
 
+# Bulk RNA-seq
+data_dir=./datasets/exp
+embedding_len=2000
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=53
+regression=True 
+python scirpt/benchmark-exp.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# Exon_PSI
+data_dir=./datasets/Exon_PSI
+embedding_len=600
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=56
+regression=True 
+python scirpt/benchmark-Exon_PSI.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# PPI
+## tB
+data_dir=./datasets/PPI/tB
+embedding_len=1000
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=True 
+python scirpt/benchmark-PPI-EPI.py  $model_name $data_dir $layer  $random_seed $output_dim 
+
+
+# EPI
+## tB
+data_dir=./datasets/EPI/tB
+
+embedding_len=2000
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding |grep data_0"
+
+embedding_len=1000
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding |grep data_1"
+
+random_seed=42
+output_dim=1
+regression=True 
+python scirpt/benchmark-PPI-EPI.py  $model_name $data_dir $layer  $random_seed $output_dim 
+
 
 
