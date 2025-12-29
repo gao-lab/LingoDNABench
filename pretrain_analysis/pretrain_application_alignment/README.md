@@ -49,12 +49,20 @@ run_embedding_extraction() {
 # Usage example
 # =========================
 
-DATA_DIR="../benchmark/datasets/promoter/prom_300_tata"
-EPOCH=0
-LAYER=-1
-EMBED_LEN=300
+data_dir="../benchmark/datasets/promoter/prom_300_tata"
+epoch=0
+layer=-1
+embedding_len=300
 
-run_embedding_extraction "$DATA_DIR" "$EPOCH" "$LAYER" 
+for EPOCH in {0..8}:
+do
+run_embedding_extraction "$data_dir" "$epoch" "$layer" 
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+done
+
 ```
 
 ### Apply embedding to genomic applications
