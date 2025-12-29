@@ -474,3 +474,103 @@ variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
 
 
 
+
+# TFBS
+model_name=nucleotide-transformer-2.5b-multi-species
+model_type=nt
+layer=-1
+input_dir=./datasets/TFBS
+feature_name=TFBS
+mkdir ${input_dir}/${model_name}
+output_dir=${input_dir}/${model_name}
+for idx in {0..57}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
+done
+for idx in {0..11}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx valid TFBS $model_name $layer $input_dir
+done
+for idx in {0..14}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx test TFBS $model_name $layer $input_dir
+done
+
+
+embedding_len=510
+model_dim=2560
+dataset_dir=./datasets/TFBS
+checkpoint_dir=../datasets/TFBS/checkpoint
+eval_dir=../datasets/TFBS/eval 
+python TFBS_510-embedding-all_model.py $model_name $layer $((embedding_len / 6 + 1 )) $model_dim $data_dir $checkpoint_dir $eval_dir
+
+
+# DNA accessibility
+model_name=nucleotide-transformer-2.5b-multi-species
+model_type=nt
+layer=-1
+input_dir=./datasets/ACC
+feature_name=ACC
+mkdir ${input_dir}/${model_name}
+output_dir=${input_dir}/${model_name}
+
+for idx in {0..96}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train ACC $model_name $layer $input_dir
+done
+
+for idx in {0..19}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx valid ACC $model_name $layer $input_dir
+done
+for idx in {0..24}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx test ACC $model_name $layer $input_dir
+done
+
+
+embedding_len=510
+model_dim=2560
+dataset_dir=./datasets/ACC
+checkpoint_dir=../datasets/ACC/checkpoint
+eval_dir=../datasets/ACC/eval 
+python ACC_510-embedding-all_model.py $model_name $layer $((embedding_len / 6 + 1 )) $model_dim $data_dir $checkpoint_dir $eval_dir
+
+# Histone modification
+model_name=nucleotide-transformer-2.5b-multi-species
+model_type=nt
+layer=-1
+input_dir=./datasets/HM
+feature_name=HM
+mkdir ${input_dir}/${model_name}
+output_dir=${input_dir}/${model_name}
+for idx in {0..57}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx train HM $model_name $layer $input_dir
+done
+for idx in {0..11}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx valid HM $model_name $layer $input_dir
+done
+for idx in {0..14}
+do
+python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
+python 03_embed2tfr.py $idx test HM $model_name $layer $input_dir
+done
+
+
+embedding_len=510
+model_dim=2560
+dataset_dir=./datasets/HM
+checkpoint_dir=../datasets/HM/checkpoint
+eval_dir=../datasets/HM/eval 
+python HM-embedding-all_model.py $model_name $layer $((embedding_len / 6 + 1 )) $model_dim $data_dir $checkpoint_dir $eval_dir
+
