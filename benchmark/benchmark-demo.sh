@@ -457,4 +457,20 @@ regression=True
 python scirpt/benchmark-PPI-EPI.py  $model_name $data_dir $layer  $random_seed $output_dim 
 
 
+# Variant
+## disease-related 
+data_dir=./datasets/variant/var_disease_coding
+variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
+
+data_dir=./datasets/variant/var_disease_noncoding
+variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
+
+## transcript-related
+data_dir=./datasets/variant/var_expression_eQTL
+variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
+
+data_dir=./datasets/variant/var_expression_MPRA
+variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
+
+
 
