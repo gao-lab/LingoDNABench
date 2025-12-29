@@ -244,12 +244,12 @@ done
 for idx in {0..11}
 do
 python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
-python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
+python 03_embed2tfr.py $idx valid TFBS $model_name $layer $input_dir
 done
 for idx in {0..14}
 do
 python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
-python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
+python 03_embed2tfr.py $idx test TFBS $model_name $layer $input_dir
 done
 ```
 
