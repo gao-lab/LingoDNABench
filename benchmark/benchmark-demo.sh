@@ -150,11 +150,229 @@ python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $
 
 # Enhancer
 ## human
+data_dir=./datasets/enhancer/human
+embedding_len=200
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
 
-
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
 
 
 ## mouse
+data_dir=./datasets/enhancer/mouse
+embedding_len=200
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# DNA methylation
+## 5mC
+data_dir=./datasets/DNA_methylation/5mC
+embedding_len=41
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+## 6mA
+data_dir=./datasets/DNA_methylation/6mA
+embedding_len=41
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# Silencer
+data_dir=./datasets/silencer
+embedding_len=200
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# CRE activity
+## HepG2
+data_dir=./datasets/CRE_activity/HepG2
+embedding_len=230
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=True 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+## K562
+data_dir=./datasets/CRE_activity/K562
+embedding_len=230
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=True 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# Splice site
+## acceptor
+data_dir=./datasets/splice_site/acceptor
+embedding_len=400
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+## donor
+data_dir=./datasets/splice_site/donor
+embedding_len=400
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# PAS all
+data_dir=./datasets/PAS
+embedding_len=600
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# PAS AATAAA only
+data_dir=./datasets/PAS_AATAAA
+embedding_len=600
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# TIS
+data_dir=./datasets/TIS
+embedding_len=600
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+
+# Intronretention
+data_dir=./datasets/TIS
+embedding_len=600
+run_embeddings \
+    "$data_dir"\
+    "$model_dir" \
+    "$model_type" \
+    "$model_name" \
+    "$((embedding_len/6+1))" \
+    "$layer" \
+    "grep -v embedding"
+
+random_seed=42
+output_dim=1
+regression=False 
+python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
 
 
 
