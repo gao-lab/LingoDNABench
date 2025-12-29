@@ -28,7 +28,7 @@ run_embeddings () {
 
         for file in $(find "$dir" -type f -name "*data*" | eval "$filter_cmd"); do
             echo "$file $dir"
-            python get-embeddings-new.py \
+            python get-embeddings.py \
                 "$model_dir" \
                 "$model_type" \
                 "$model_name" \
