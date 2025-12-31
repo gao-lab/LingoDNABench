@@ -8,8 +8,8 @@ import numpy as np
 import h5py
 import os
 import sys
-sys.path.append("../pretrain_application_alignment/BERT-155M-Series")
-from dpb_bert.model import DNALingo
+sys.path.append("../../pretrain_gLM")
+from BERT import BaselineBERT
 import copy
 import os
 import torch
@@ -93,7 +93,7 @@ if model_type=="RandomSeq":
 def load_model():
     # init model
     print("Initializing model and loading checkpoint...")
-    model = DNALingo(max_vocab, n_heads, d_kv, n_layers, eval_mode=False)
+    model = BaselineBERT(max_vocab, n_heads, d_kv, n_layers, eval_mode=False)
     print("trans loading")
     model.to(device)
     
