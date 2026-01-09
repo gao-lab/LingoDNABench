@@ -31,10 +31,10 @@ huggingface-cli download --resume-download GenerTeam/GENERator-eukaryote-3b-base
 #lucaone
 huggingface-cli download --resume-download LucaGroup/LucaOne-default-step36M --local-dir ${model_dir}/lucaone
 
-#DeepGene
-git clone https://github.com/wds-seu/DeepGene.git
-
 #GPN-MSA
+git clone https://github.com/songlab-cal/gpn.git
+
+#GPN-MSA model checkpoint
 huggingface-cli download --resume-download songlab/gpn-msa-sapiens   --local-dir ${model_dir}/gpn-msa-sapiens
 
 #enformer
