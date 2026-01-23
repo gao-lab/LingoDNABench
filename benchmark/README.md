@@ -26,14 +26,14 @@ sh models-download.sh ./models
 ## Extracting embeddings
 An example for extracting embedding in TATA-promoter (proximal) prediction dataset.
 ```
-input_seq= datasets/promoter/prom_300_tata/dev_data_0.txt
+input_seq=datasets/promoter/prom_300_tata/dev_data_0.txt
 model_type=nt
 model_name=nucleotide-transformer-2.5b-multi-species
 embedding_len=300
 out_dir=datasets/promoter/prom_300_tata/$model_name
 mkdir -p $out_dir
 layer=-1
-python get-embeddings.py $model_type $model_name $input_seq $out_dir $((embedding_len/6+1)) -1
+python get-embeddings.py ./models $model_type $model_name $input_seq $out_dir $((embedding_len/6+1)) -1
 ```
 A script for extracting embedding in gLMs (For quick testing, only NT-2.5b-MS and DNABERT2 are not commented out in the script)
 ```

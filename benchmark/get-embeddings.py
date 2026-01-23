@@ -310,8 +310,8 @@ def run_bert_series():
     return result
 
 def run_dnabert():
-    tokenizer = AutoTokenizer.from_pretrained(f"{model_dir}/{model_name}")
-    model = AutoModel.from_pretrained(f"{model_dir}/{model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(f"{model_dir}/{model_name}",local_files_only=True)
+    model = AutoModel.from_pretrained(f"{model_dir}/{model_name}",local_files_only=True)
     model.to(device).eval()
 
     k_mers = int(model_name.split("_")[-1])
@@ -384,17 +384,15 @@ def run_dnabert2():
 
     model_path = f"{model_dir}/DNABERT-2-117M"
 
-    config = BertConfig.from_pretrained(model_path)
     model = AutoModel.from_pretrained(
         model_path,
-        config=config,
-        trust_remote_code=True,
+        trust_remote_code=True,local_files_only=True
     ).to(device).eval()
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_path,
         trust_remote_code=True,
-        model_max_length=embedding_len,
+        model_max_length=embedding_len,local_files_only=True
     )
 
     seqs = np.loadtxt(input_seq, dtype=str)
@@ -410,17 +408,14 @@ def run_dnabert2():
         for i, seq in enumerate(seqs):
             x = tokenizer(seq, return_tensors="pt")
             x = {k: v.to(device) for k, v in x.items()}
-
             encoded_layers = model(
-                **x,
-                output_all_encoded_layers=True
+                **x,return_dict=True
             )
-
             # encoded_layers[layer]: [seq_len+2, hidden]
             seq_len = x["input_ids"].shape[1] - 2
 
             temp = (
-                encoded_layers[layer][1:-1, :]
+                encoded_layers[0][0,1:-1, :]
                 .detach()
                 .cpu()
                 .numpy()
