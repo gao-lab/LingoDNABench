@@ -30,13 +30,7 @@ torchrun --nnodes 1 --nproc_per_node 4 BaselineBERT.py \
 --train_data ./data/dataset/ms.4096.h5 \
 --model_save_path ./model/ms_gLM
 ```
-Train gLM with random sequence dataset.
-```bash
-# train random gLM with 1 GPU
-torchrun --nnodes 1 --nproc_per_node 1 BaselineBERT.py \
---train_data ./data/dataset/random.4096.h5 \
---model_save_path ./model/RandomSeq
-```
+
 ### RandomWeight model
 RandomWeight model uses random weights to initialize the model and save <b>without any training</b>.
 ```bash 
