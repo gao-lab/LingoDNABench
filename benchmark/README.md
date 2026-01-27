@@ -20,6 +20,7 @@
 
 Download the genomic language model to benchmarking
 ```
+pip install huggingface-cli==0.36.0
 sh models-download.sh ./models
 ```
 
