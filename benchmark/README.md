@@ -23,6 +23,129 @@ Download the genomic language model to benchmarking
 sh models-download.sh ./models
 ```
 
+## Model-Specific Environments and References
+
+Due to substantial differences in architectures, dependencies, and CUDA requirements,
+ **each genomic language model (gLM) was evaluated in its own validated software environment**, following the official implementation released by the original authors.
+
+We do **not** attempt to unify model environments.
+ Instead, we standardize **evaluation protocols, datasets, and metrics**, while respecting model-specific execution requirements.
+
+Below we list the models evaluated in this benchmark, together with the corresponding reference implementations.
+
+------
+
+### bert-series
+
+``` bash
+conda create -n bert-series python=3.9 pip -c conda-forge
+conda activate bert-series
+
+pip install \
+  torch==2.6.0+cu124 \
+  torchvision==0.21.0+cu124 \
+  torcheval \
+  torchmetrics \
+  --index-url https://download.pytorch.org/whl/cu124
+
+# download from https://github.com/Dao-AILab
+pip install flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp39-cp39-linux_x86_64.whl  
+```
+
+### Caduceus-ps
+
+- **Official repository:** https://github.com/kuleshov-group/caduceus
+- **Hugging Face:** https://huggingface.co/kuleshov-group/caduceus-ps_seqlen-131k_d_model-256_n_layer-16
+- **Inference:** official inference pipeline
+- **Notes:** state-space–based sequence modeling
+
+------
+
+### HyenaDNA-1M
+
+- **Official repository:** https://github.com/HazyResearch/hyena-dna
+- **Hugging Face:** https://huggingface.co/LongSafari/hyenadna-large-1m-seqlen-hf
+- **Inference:** official implementation
+- **Notes:** requires custom CUDA extensions (e.g., `causal_conv1d`)
+
+------
+
+### DeepGene
+
+- **Official repository:** https://github.com/wds-seu/DeepGene/blob/main/README.md
+- **Inference:** official inference scripts
+- **Notes:** evaluated using pretrained checkpoints released by the authors
+
+------
+
+### DNABERT-3mer
+
+- **Official repository:** https://github.com/jerryji1993/DNABERT
+- **Hugging Face:** https://huggingface.co/zhihan1996/DNA_bert_3
+- **Inference:** Hugging Face pipeline
+- **Notes:** k-mer–based tokenization (k=3)
+
+------
+
+### DNABERT-2
+
+- **Official repository:** https://github.com/MAGICS-LAB/DNABERT_2
+- **Hugging Face:** https://huggingface.co/zhihan1996/DNABERT-2-117M
+- **Inference:** Hugging Face pipeline
+- **Notes:** byte-level tokenizer
+
+------
+
+### GPN-MSA
+
+- **Official repository:** https://github.com/songlab-cal/gpn
+- **Inference:** official inference code
+- **Notes:** pretrained with MSA-aware objectives; evaluated following authors’ recommended settings
+
+------
+
+### OmniNA
+
+- **Hugging Face:** https://huggingface.co/XLS/OmniNA-220m
+- **Inference:** Hugging Face pipeline
+- **Notes:** long-range genomic sequence modeling; environment tightly coupled to released codebase
+
+------
+
+### LucaOne
+
+- **Hugging Face:** https://huggingface.co/LucaGroup/LucaOne-default-step36M
+- **Inference:** official inference pipeline
+- **Notes:** multi-task and multi-modal pretraining objectives
+
+------
+
+### NT-MS-2.5B
+
+- **Official repository:** https://github.com/instadeepai/nucleotide-transformer/tree/main/nucleotide_transformer
+- **Hugging face:** https://huggingface.co/InstaDeepAI/nucleotide-transformer-2.5b-multi-species
+- **Inference:** official inference scripts
+- **Notes:** large-scale parameterization
+
+------
+
+### GENERator
+
+- **Official repository:** https://github.com/GenerTeam/GENERator
+- **Hugging face:** https://huggingface.co/GenerTeam/GENERanno-eukaryote-0.5b-base
+- **Inference:** official generative inference pipeline
+- **Notes:** generative genomic modeling objective
+
+------
+
+### Evo2
+
+- **Official repository:** https://github.com/arcinstitute/evo2
+- **Inference:** official inference implementation
+- **Notes:** pretrained on mixed genomic sources, including eukaryotic and prokaryotic genomes
+
+------
+
 ## Extracting embeddings
 An example for extracting embedding in TATA-promoter (proximal) prediction dataset.
 ```
