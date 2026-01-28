@@ -163,7 +163,21 @@ sh run-get-embedding.sh ./datasets/promoter/prom_300_tata 300
 ```
 
 
-## Downstream applications
+## Downstream applications (evaluation)
+### Evaluation enviroment setup
+```
+# torch
+conda create -n torch-evaluation python=3.9 pip -c conda-forge
+conda activate torch-evaluation
+pip install pandas 
+pip install scikit-learn
+pip install biopython
+pip install \
+  torch==2.6.0+cu124 \
+  --index-url https://download.pytorch.org/whl/cu124
+```
+
+
 ### default applications:
 ```
 # default applications
@@ -173,7 +187,7 @@ layer=-1 # the last layer
 random_seed=42
 output_dim=1
 regression=False #classification application
-python scirpt/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
+python script/benchmark-default-applications.py  $model_name $data_dir $layer  $random_seed $output_dim $regression
 ```
 
 ### Exon PSI applications
@@ -184,7 +198,7 @@ model_name=nucleotide-transformer-2.5b-multi-species
 random_seed=42
 output_dim=56
 regression=True 
-python scirpt/benchmark-Exon_PSI.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
+python script/benchmark-Exon_PSI.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
 ```
 
 ### Gene expression level prediction applications
@@ -195,7 +209,7 @@ layer=-1
 random_seed=42
 output_dim=53
 regression=True
-python scirpt/benchmark-exp.py  $model_name ${data_dir} $layer  $random_seed $output_dim $regression
+python script/benchmark-exp.py  $model_name ${data_dir} $layer  $random_seed $output_dim $regression
 ```
 
 ### Promoter-promoter/Enhancer-promoter interaction applications
@@ -206,7 +220,7 @@ layer=-1
 random_seed=42
 output_dim=1
 regression=False
-python benchmark-PPI-PEI.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
+python script/benchmark-PPI-PEI.py  $model_name ${data_dir}/${model_name} $layer  $random_seed $output_dim $regression
 ```
 
 ### TFBS/DNA accessibility/Histone modification
@@ -218,7 +232,7 @@ model_dim=2560
 dataset_dir=./datasets/TFBS
 checkpoint_dir=../datasets/TFBS/checkpoint
 eval_dir=../datasets/TFBS/eval 
-python TFBS_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species -1 $((embedding_len / 6 + 1 )) $model_dim $data_dir $checkpoint_dir $eval_dir
+python script/TFBS_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species -1 $((embedding_len / 6 + 1 )) $model_dim $data_dir $checkpoint_dir $eval_dir
 
 ```
 
@@ -227,5 +241,5 @@ python TFBS_510-embedding-all_model.py nucleotide-transformer-2.5b-multi-species
 data_dir=.datasets/variant/var_disease_noncoding
 model_name=nucleotide-transformer-2.5b-multi-species
 layer=-1
-python variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
+python script/variant_effect_prediction-zero-shot.py $data_dir $model_name $layer
 ```
