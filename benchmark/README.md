@@ -40,7 +40,6 @@ This repository benchmarks multiple genomic language models (gLMs) by **standard
 | Evo2-7B | Genome sequences from 128M species | SSM | 1-mer | CLM | 7B |
 
 > Notes:
-> - MLM = masked language modeling; CLM = causal language modeling.
 > - Some models require custom CUDA extensions; do not expect a single unified environment.
 
 ---
@@ -176,16 +175,13 @@ pip install pandas scikit-learn biopython
 pip install   torch==2.6.0+cu124   --index-url https://download.pytorch.org/whl/cu124
 ```
 
-#### TensorFlow evaluation env
+#### TensorFlow evaluation env (For TFBS/HM/DNA_accessibility)
 ```bash
 conda create -n tf-eval python=3.10 pip -c conda-forge
 conda activate tf-eval
 
 pip install "tensorflow[and-cuda]"==2.16.1 scikit-learn
 ```
-
-> Tip: Prefer conda env isolation per task (embedding vs downstream) to reduce dependency conflicts.
-
 ---
 
 ### 5.2 Default Applications
