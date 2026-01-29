@@ -1,35 +1,23 @@
 # Datasets & Preprocessing Guide (gLM Benchmark)
 
-> **Note (WIP):** dataset download URLs / exact on-disk locations will be documented once the final storage layout is confirmed.
-> This README focuses on **what each dataset contains** and **how to preprocess inputs/labels** for embedding extraction and downstream training.
 
----
+## Dataset Download
 
-## Directory Conventions
+All benchmark datasets are hosted at:
 
-Each dataset directory follows the same high-level layout:
-
-```
-<dataset_dir>/
-  train_data_0.txt
-  dev_data_0.txt
-  test_data_0.txt
-  train_label.txt
-  dev_label.txt
-  test_label.txt
-  (optional) train_data_1.txt / dev_data_1.txt / test_data_1.txt
-  (optional) train_target.npy / dev_target.npy / test_target.npy
-  (optional) train.vcf / dev.vcf / test.vcf
+```text
+http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/
 ```
 
-**Naming conventions**
-- `*_data_0.txt`: primary DNA sequence input (one sequence per line).
-- `*_data_1.txt`: secondary DNA sequence input (dual-input tasks only; one sequence per line; aligned with `data_0`).
-- `*_label.txt`: classification labels (typically `0/1`, one per line).
-- `*_target.npy`: regression targets (NumPy array; shape depends on task).
-- `*.vcf`: variant sites (used by variant-effect tasks).
+### Option A: Download with `wget`
 
----
+```bash
+# Example: download everything under the directory
+# (This may be large; consider downloading only the datasets you need.)
+wget -r -np -nH --cut-dirs=2 -R "index.html*" -P ./datasets \
+  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/"
+```
+
 
 ## Datasets Information
 
@@ -331,8 +319,6 @@ for idx in {0..14}; do
   python 03_embed2tfr.py "${idx}" test "${feature_name}" "${model_name}" "${layer}" "${input_dir}"
 done
 ```
-
-> **Important:** the shard naming pattern above (`*_train_*`, `*_valid_*`, `*_test_*`) must match what your preprocessing scripts actually generate.
 
 ### Variant effect prediction
 
