@@ -1,6 +1,42 @@
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 （后续确定数据集存放的下载路径后会更新这个README，在更好说明数据怎么处理）
+# Datasets & Preprocessing Guide (gLM Benchmark)
+
+> **Note (WIP):** dataset download URLs / exact on-disk locations will be documented once the final storage layout is confirmed.
+> This README focuses on **what each dataset contains** and **how to preprocess inputs/labels** for embedding extraction and downstream training.
+
+---
+
+## Directory Conventions
+
+Each dataset directory follows the same high-level layout:
+
+```
+<dataset_dir>/
+  train_data_0.txt
+  dev_data_0.txt
+  test_data_0.txt
+  train_label.txt
+  dev_label.txt
+  test_label.txt
+  (optional) train_data_1.txt / dev_data_1.txt / test_data_1.txt
+  (optional) train_target.npy / dev_target.npy / test_target.npy
+  (optional) train.vcf / dev.vcf / test.vcf
+```
+
+**Naming conventions**
+- `*_data_0.txt`: primary DNA sequence input (one sequence per line).
+- `*_data_1.txt`: secondary DNA sequence input (dual-input tasks only; one sequence per line; aligned with `data_0`).
+- `*_label.txt`: classification labels (typically `0/1`, one per line).
+- `*_target.npy`: regression targets (NumPy array; shape depends on task).
+- `*.vcf`: variant sites (used by variant-effect tasks).
+
+---
 
 ## Datasets Information
+
+The table below summarizes the tasks and dataset statistics.
+
+<details>
+<summary><strong>Click to expand the full dataset table</strong></summary>
 
 <table>
   <thead>
@@ -11,7 +47,7 @@
       <th>Number of data</th>
       <th>Output dim</th>
       <th>Description</th>
-      <th>Classification/Regression</th>
+      <th>Task</th>
       <th>Reference</th>
     </tr>
   </thead>
@@ -31,7 +67,7 @@
       <td>510</td>
       <td>3,530,399</td>
       <td>1,770</td>
-      <td>ENCODE Dnase-seq and ATAC-seq data</td>
+      <td>ENCODE DNase-seq and ATAC-seq data</td>
       <td>Classification</td>
       <td>https://www.encodeproject.org/</td>
     </tr>
@@ -40,10 +76,11 @@
       <td>41</td>
       <td>5mC: 4,688; 6mA: 36,670</td>
       <td>1</td>
-      <td>Detection of 5-methylcytosine (5mC) and N6-methyladenosine (6mA) modifications in DNA sequences</td>
+      <td>Detection of 5mC and 6mA modifications</td>
       <td>Classification</td>
       <td>https://www.biorxiv.org/content/10.1101/2024.08.16.608288v1</td>
     </tr>
+    <tr>
       <td rowspan="7">Transcription regulation</td>
       <td>TFBS</td>
       <td>510</td>
@@ -55,10 +92,10 @@
     </tr>
     <tr>
       <td>Promoter</td>
-      <td>300/70</td>
+      <td>300 / 70</td>
       <td>TATA: 6,130; non-TATA: 53,066; all: 59,196</td>
       <td>1</td>
-      <td>-249~+50bp / -34~+35bp of TSS, Including TATA promoter and non-TATA promoter</td>
+      <td>-249~+50bp / -34~+35bp around TSS; includes TATA and non-TATA promoters</td>
       <td>Classification</td>
       <td>https://arxiv.org/abs/2306.15006</td>
     </tr>
@@ -67,7 +104,7 @@
       <td>200</td>
       <td>Human: 12,639; Mouse: 13,378</td>
       <td>1</td>
-      <td>Data was downloaded from Vista Enhancer Browser (241106). Positive and negative enhancers were split to 200 bp bins. CD-hit was used to remove seqs with high similarity (>0.8). Tissue and stage: fb_e11.5 (forebrain, positive) and e11.5 (negative)</td>
+      <td>Vista Enhancer Browser (241106). Split to 200 bp bins; CD-HIT removes high similarity (&gt;0.8). Tissue/stage: fb_e11.5 (pos) vs e11.5 (neg).</td>
       <td>Classification</td>
       <td>https://enhancer.lbl.gov/vista/</td>
     </tr>
@@ -78,34 +115,34 @@
       <td>1</td>
       <td>Candidate silencer prediction</td>
       <td>Classification</td>
-      <td>https://github.com/xy-chen16/DeepSilencer, https://academic.oup.com/nar/article/49/D1/D221/5921294?login=true#221747952</td>
+      <td>https://github.com/xy-chen16/DeepSilencer, https://academic.oup.com/nar/article/49/D1/D221/5921294</td>
     </tr>
     <tr>
       <td>CRE activity</td>
       <td>230</td>
       <td>HepG2: 245,852; K562: 393,328</td>
       <td>1</td>
-      <td>CRE: cis regulatory element, here is potential promoter and enhancer. Regulatory activity measured by lentiMPRA in HepG2 and K562</td>
+      <td>lentiMPRA activity for candidate promoters/enhancers in HepG2 and K562</td>
       <td>Regression</td>
       <td>https://www.nature.com/articles/s41586-024-08430-9</td>
     </tr>
     <tr>
-      <td>Promoter-promoter interaction</td>
-      <td>1000+1000</td>
+      <td>Promoter–promoter interaction</td>
+      <td>1000 + 1000</td>
       <td>tB: 162,391; Mon: 136,164; FoeT: 143,347; tCD4: 155,821; nCD4: 166,806; tCD8: 154,059</td>
       <td>1</td>
-      <td>Promoter-promoter interaction. Six cell lines: total B cells (tB), monocytes (Mon), foetal thymus (FoeT), total CD4+ T cells (tCD4), naive CD4+ T cells (nCD4), and total CD8+ T cells (tCD8)</td>
+      <td>Promoter–promoter interaction in 6 cell types (tB, Mon, FoeT, tCD4, nCD4, tCD8)</td>
       <td>Classification</td>
-      <td>https://academic.oup.com/nar/article/47/10/e60/5380496?login=true</td>
+      <td>https://academic.oup.com/nar/article/47/10/e60/5380496</td>
     </tr>
     <tr>
-      <td>Enhancer-promoter interaction</td>
-      <td>2000+1000</td>
+      <td>Enhancer–promoter interaction</td>
+      <td>2000 + 1000</td>
       <td>tB: 176,096; Mon: 162,104; FoeT: 133,263; tCD4: 161,364; nCD4: 174,269; tCD8: 162,990</td>
       <td>1</td>
-      <td>Enhancer-promoter interaction. Six cell lines: total B cells (tB), monocytes (Mon), foetal thymus (FoeT), total CD4+ T cells (tCD4), naive CD4+ T cells (nCD4), and total CD8+ T cells (tCD8)</td>
+      <td>Enhancer–promoter interaction in 6 cell types (tB, Mon, FoeT, tCD4, nCD4, tCD8)</td>
       <td>Classification</td>
-      <td>https://academic.oup.com/nar/article/47/10/e60/5380496?login=true</td>
+      <td>https://academic.oup.com/nar/article/47/10/e60/5380496</td>
     </tr>
     <tr>
       <td rowspan="5">Post-transcription regulation</td>
@@ -113,34 +150,34 @@
       <td>600</td>
       <td>AATAAA: 22,602; all: 41,864</td>
       <td>1</td>
-      <td>Polyadenylation signals, with AATAAA variant and all variant</td>
+      <td>PolyA signal variants (including canonical AATAAA)</td>
       <td>Classification</td>
-      <td>https://academic.oup.com/bioinformatics/article/38/17/4053/6633307?login=true</td>
+      <td>https://academic.oup.com/bioinformatics/article/38/17/4053/6633307</td>
     </tr>
     <tr>
       <td>Translation initiation sites</td>
       <td>600</td>
       <td>56,488</td>
       <td>1</td>
-      <td>Translation initiation sites</td>
+      <td>Translation initiation site prediction</td>
       <td>Classification</td>
-      <td>https://academic.oup.com/bioinformatics/article/38/17/4053/6633307?login=true</td>
+      <td>https://academic.oup.com/bioinformatics/article/38/17/4053/6633307</td>
     </tr>
     <tr>
       <td>Splice site</td>
       <td>400</td>
       <td>Acceptor: 22,154; Donor: 21,945</td>
       <td>1</td>
-      <td>Two datasets: acceptor and negative; donor and negative. Balanced dataset, error-free. Negative seqs are from randomly selected exon regions, intron regions and GT or AG dinucleotides</td>
+      <td>Balanced, error-free. Negatives from exon/intron regions and GT/AG dinucleotides.</td>
       <td>Classification</td>
       <td>https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-021-04471-3</td>
     </tr>
     <tr>
-      <td>Exon PIS</td>
-      <td>400+400</td>
+      <td>Exon PSI</td>
+      <td>400 + 400</td>
       <td>40,737</td>
       <td>56</td>
-      <td>Percent spliced-in (PSI): skipping level of on exon in alternative splicing. Input sequence: 300 + 100 (acceptor) and 100 + 300 (donor); Number of target tissues: 56. Please use custom loss function provided in the data dictionary for downstream model</td>
+      <td>Percent spliced-in (PSI) across 56 tissues. Use the custom loss function in the dataset dictionary for training.</td>
       <td>Regression</td>
       <td>https://github.com/gao-lab/DNALingo-dev/blob/main/www.biorxiv.org/content/10.1101/2024.02.29.582810v2</td>
     </tr>
@@ -159,35 +196,35 @@
       <td>2000</td>
       <td>21,700</td>
       <td>53</td>
-      <td>53 GTEx tissues, mRNA and lncRNA transcription prediction based on promoter sequence (TSS -1k~+1k)</td>
+      <td>53 GTEx tissues; promoter sequence (TSS -1k~+1k) predicts mRNA/lncRNA expression</td>
       <td>Regression</td>
       <td>https://www.nature.com/articles/s41592-021-01252-x</td>
     </tr>
     <tr>
       <td rowspan="4">Variant effect prediction</td>
-      <td>Disease-related coding</td>
+      <td>Disease-related (coding)</td>
       <td>1</td>
       <td>122,237</td>
       <td>1</td>
-      <td>Based on clinvar 240307 and gencode v44, GRCh38. Only consider "Pathogenic" and "Benign" SNVs</td>
+      <td>ClinVar (240307) + GENCODE v44, GRCh38; SNVs labeled Pathogenic vs Benign</td>
       <td>Classification</td>
       <td>https://www.ncbi.nlm.nih.gov/clinvar/</td>
     </tr>
     <tr>
-      <td>Disease-related noncoding</td>
+      <td>Disease-related (noncoding)</td>
       <td>1</td>
       <td>111,202</td>
       <td>1</td>
-      <td>Based on clinvar 240307 and gencode v44, GRCh38. Only consider "Pathogenic" and "Benign" SNVs</td>
+      <td>ClinVar (240307) + GENCODE v44, GRCh38; SNVs labeled Pathogenic vs Benign</td>
       <td>Classification</td>
       <td>https://www.ncbi.nlm.nih.gov/clinvar/</td>
     </tr>
     <tr>
       <td>Transcription-related (eQTL)</td>
       <td>1</td>
-      <td>108~5,480</td>
+      <td>108 ~ 5,480</td>
       <td>1</td>
-      <td>eQTLs and negative variants in 49 GTEx tissues. Reference genome version: GRCh38</td>
+      <td>eQTLs and negatives in 49 GTEx tissues; GRCh38</td>
       <td>Classification</td>
       <td>https://www.nature.com/articles/s41592-021-01252-x</td>
     </tr>
@@ -196,63 +233,114 @@
       <td>1</td>
       <td>21,000</td>
       <td>1</td>
-      <td>K562 and HepG2 cell lines, random select 210k (pos: neg = 1:20) from REVA benchmark dataset. Reference genome version: GRCh38</td>
+      <td>K562 &amp; HepG2; sampled 210k (pos:neg = 1:20) from REVA; GRCh38</td>
       <td>Classification</td>
       <td>https://academic.oup.com/gpb/article/19/4/590/7230396</td>
     </tr>
   </tbody>
 </table>
 
+</details>
 
-## Data Precessing
-### Default setting
-The file `train/dev/test_data_0.txt` contains DNA sequences. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file `train/dev/test_label.txt` contains the corresponding labels, which are used for model training.
+---
 
-### Expression level prediction
-The file `train/dev/test_data_0.txt` contains DNA sequences. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file `train/dev/test_target.npy` contains the corresponding labels (each record corresponds to 53 continuous values), which are used for model training.
+## Data Processing
 
+### Default setting (all tasks unless stated otherwise)
 
-### Exon PSI prediction
-The files  `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt` contain DNA sequences. This is a dual-sequence input task. In the gLM benchmark, these need to be converted into gLM embeddings before performing adapter tuning. The file `train/dev/test_target.npy` contains the corresponding labels (each record corresponds to 56 continuous values), which are used for model training.
+- `train/dev/test_data_0.txt`: DNA sequences (one per line).
+- `train/dev/test_label.txt`: labels aligned with `data_0` (one per line).
 
+In the benchmark workflow:
+1. **Convert sequences → gLM embeddings** (per model).
+2. **Train a downstream adapter / predictor** using embeddings + labels.
 
-### PPI-EPI(Promoter-promoter/Enhancer-promoter interaction) prediction
-The files `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt` contain DNA sequences. However, due to the large volume of data, it can be split into multiple files and then read as a streaming dataset during training. (The `../scripts/benchmark-PPI_EPI.py` script accepts .h5 files and is configured to split the data into smaller files, each containing 5000 records.)
+### Expression level prediction (Gene expression)
 
-### TFBS/DNA accessibility/Histone modification
-Given the large size of the dataset, the embeddings are converted into the TFRecord format for training. This process involves splitting the data into appropriately sized chunks(25k sequence per file), storing them as TFRecords, and subsequently training them through a TensorFlow pipeline.
+- `train/dev/test_data_0.txt`: DNA sequences (one per line).
+- `train/dev/test_target.npy`: regression targets (`N × 53`).
 
+### Exon PSI prediction (dual-input regression)
+
+- `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt`: two aligned DNA sequences per sample.
+- `train/dev/test_target.npy`: regression targets (`N × 56`).
+
+> The PSI task typically requires a **custom loss**; use the loss function provided with the dataset metadata/dictionary.
+
+### PPI / EPI (Promoter–promoter / Enhancer–promoter interaction)
+
+- `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt`: dual-input sequences.
+- For large datasets, data may be **sharded** and loaded as a **streaming dataset** during training.
+
+The script accepts `.h5` and can split into chunks (e.g., **5,000 records per shard**):
+- `script/benchmark-PPI_EPI.py`
+
+### TFBS / DNA accessibility / Histone modification (TFRecord pipeline)
+
+Due to dataset size, embeddings are converted into **TFRecords** for efficient TensorFlow input pipelines.
+
+Typical steps:
+1. Prepare and split sequences into manageable chunks (e.g., **25k sequences per file**).
+2. Extract embeddings and write TFRecords.
+3. Train via TF pipeline.
+
+Example commands (edit paths to match your local layout):
+
+```bash
+# 1) Prepare Basset-style sequence shards
+# sh script/01_process_basset_data.sh <feature_name> <input_dir> <output_dir> <blacklist_bed> <reference_fasta>
+sh script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../data/hg38-blacklist.v2.bed ../data/hg38-genome.fa
+
+# 2) Split into chunks and write index files / metadata
+# python script/02_process_basset_data.py <feature_name> <input_dir> <output_dir> <output_dim> <split_size>
+python script/02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
 ```
-# sh ./script/01_process_basset_data.sh feature_name input_dir output_dir blacklist_file reference_genome
-sh ./script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../data/hg38-blacklist.v2.bed ../data/hg38-genome.fa
-# python ./script/02_process_basset_data.py feature_name input_dir output_dir output_dim split_size
-python ./script/02_process_basset_data.py TFBS ./TFBS ./TFBS 3572 25000
 
-# Extract embedding and write it into tfrecords
-model_name=nucleotide-transformer-2.5b-multi-species
-model_type
+Embedding extraction + TFRecord writing (fill in model variables):
+
+```bash
+model_name="nucleotide-transformer-2.5b-multi-species"
+model_type="nt"          # e.g., nt / dnabert2 / ...
 layer=-1
-input_dir=./datasets/TFBS
-feature_name=TFBS
-mkdir ${input_dir}/${model_name}
-output_dir=${input_dir}/${model_name}
-for idx in {0..57}
-do
-python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
-python 03_embed2tfr.py $idx train TFBS $model_name $layer $input_dir
+embedding_len=510        # bp length for TFBS/Accessibility/Histone
+token_len=$((embedding_len / 6 + 1))  # for non-overlapped 6-mer models (adjust per tokenizer)
+
+input_dir="./datasets/TFBS"
+feature_name="TFBS"
+mkdir -p "${input_dir}/${model_name}"
+output_dir="${input_dir}/${model_name}"
+
+# Train shards
+for idx in {0..57}; do
+  seq_file="${input_dir}/${feature_name}_train_${idx}.seq"
+  python ../get-embeddings.py ../models "${model_type}" "${model_name}" "${seq_file}" "${output_dir}" "${token_len}" "${layer}"
+  python 03_embed2tfr.py "${idx}" train "${feature_name}" "${model_name}" "${layer}" "${input_dir}"
 done
-for idx in {0..11}
-do
-python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
-python 03_embed2tfr.py $idx valid TFBS $model_name $layer $input_dir
+
+# Valid shards
+for idx in {0..11}; do
+  seq_file="${input_dir}/${feature_name}_valid_${idx}.seq"
+  python ../get-embeddings.py ../models "${model_type}" "${model_name}" "${seq_file}" "${output_dir}" "${token_len}" "${layer}"
+  python 03_embed2tfr.py "${idx}" valid "${feature_name}" "${model_name}" "${layer}" "${input_dir}"
 done
-for idx in {0..14}
-do
-python ../get-embeddings.py ../models/$model_name $model_type $model_name ${input_dir}/${feature_name}_train_{idx}.seq $output_dir $((embedding_len / 6 + 1 )) $layer 
-python 03_embed2tfr.py $idx test TFBS $model_name $layer $input_dir
+
+# Test shards
+for idx in {0..14}; do
+  seq_file="${input_dir}/${feature_name}_test_${idx}.seq"
+  python ../get-embeddings.py ../models "${model_type}" "${model_name}" "${seq_file}" "${output_dir}" "${token_len}" "${layer}"
+  python 03_embed2tfr.py "${idx}" test "${feature_name}" "${model_name}" "${layer}" "${input_dir}"
 done
 ```
+
+> **Important:** the shard naming pattern above (`*_train_*`, `*_valid_*`, `*_test_*`) must match what your preprocessing scripts actually generate.
 
 ### Variant effect prediction
-The files `train/dev/test.vcf` are VCF files for mutation sites. The files `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt` contain DNA sequences (both files contain sequences centered on the mutation site, totaling 512 bp. `data_0` contains the pre-mutation sequence, and `data_1` contains the post-mutation sequence). The file `train/dev/test_label.txt` contains the corresponding labels. For zero-shot evaluation, the training, development, and test datasets can be merged directly. The distinction provided here enables potential attempts at adapter tuning.
+
+- `train/dev/test.vcf`: VCF sites.
+- `train/dev/test_data_0.txt`: reference (pre-mutation) 512 bp sequence centered at the mutation site.
+- `train/dev/test_data_1.txt`: alternate (post-mutation) 512 bp sequence centered at the mutation site.
+- `train/dev/test_label.txt`: labels.
+
+For **zero-shot** evaluation, you can merge train/dev/test splits.  
+The provided split is retained to enable optional adapter tuning experiments.
 
