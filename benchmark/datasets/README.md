@@ -9,7 +9,7 @@ All benchmark datasets are hosted at:
 http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/
 ```
 
-### Option A: Download with `wget`
+### Download with `wget`
 
 ```bash
 # Example: download everything under the directory
