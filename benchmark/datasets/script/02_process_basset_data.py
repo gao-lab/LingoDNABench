@@ -1,61 +1,67 @@
-import pandas as pd
-import numpy as np
 import os
-import Bio
-from Bio import SeqIO
-import subprocess
 import sys
-from multiprocessing.pool import Pool
-feature_name=sys.argv[1]
-data_dir=sys.argv[2]
-split_dir=sys.argv[3]
-num_targets=int(sys.argv[4])
-split_size=int(sys.argv[5])
-def split_data(data,split_size,save_dir,elem,feature_name,types='labels'):
-    begin=0
-    cnt=0
-    total_len=data.shape[0]
-    while begin<total_len:
-        print(cnt)
-        final=min(begin+split_size,total_len)
-        temp=data[begin:final,]
-        np.save(os.path.join(save_dir,f"{feature_name}_{elem}_{types}_{cnt}.npy"),temp)
-        begin+=split_size
-        cnt+=1
+import numpy as np
+from Bio import SeqIO
 
-def split_seq(data,split_size,save_dir,elem,feature_name):
-    begin=0
-    cnt=0
-    total_len=data.shape[0]
-    while begin<total_len:
-        print(cnt)
-        final=min(begin+split_size,total_len)
-        temp=data[begin:final]
-        np.savetxt(os.path.join(save_dir,f"{feature_name}_{elem}_{cnt}.seq"),np.array(temp),delimiter='\t',fmt="%s")
-        begin+=split_size
-        cnt+=1
+feature_name = sys.argv[1]
+data_dir = sys.argv[2]
+split_dir = sys.argv[3]
+num_targets = int(sys.argv[4])
+split_size = int(sys.argv[5])
 
-for elem in ['train','valid','test']:
-    seqs=[]
-    names=[]
-    for record in SeqIO.parse(os.path.join(data_dir,f"{feature_name}_{elem}.fasta"),'fasta'):
-        seqs.append(str(record.seq).upper())
-        names.append(str(record.id).split('::')[0])
-    for i in range(len(names)):
-        names[i]=names[i].split(',')
-    total=[str(i) for i in range(num_targets)]
-    y_dataset=pd.DataFrame(np.zeros((len(names),len(total))),columns=total)
-    
-    print("processsing features...")
-    for index, row in y_dataset.iterrows():
-        for t in names[index]:
-            y_dataset.at[index,t]=1
-    labels=y_dataset.to_numpy()
-    with open(os.path.join(data_dir,f"{feature_name}_{elem}.seq"),'w') as seq_f:
-        for seq in seqs:
-            seq_f.write(f"{seq}\n")
+os.makedirs(split_dir, exist_ok=True)
 
-    print("spliting...")
-    """label"""
-    split_data(labels,split_size,split_dir,elem,feature_name,"labels")
-    split_seq(seqs,split_size,split_dir,elem,feature_name)
+def save_chunk(labels_chunk, n_rows, save_dir, elem, feature_name, chunk_idx):
+    arr = labels_chunk[:n_rows]
+    np.save(os.path.join(save_dir, f"{feature_name}_{elem}_labels_{chunk_idx}.npy"), arr)
+
+def open_chunk_seq(save_dir, elem, feature_name, chunk_idx):
+    path = os.path.join(save_dir, f"{feature_name}_{elem}_{chunk_idx}.seq")
+    return open(path, "w")
+
+for elem in ["train", "valid", "test"]:
+    fasta_path = os.path.join(data_dir, f"{feature_name}_{elem}.fasta")
+    full_seq_path = os.path.join(data_dir, f"{feature_name}_{elem}.seq")
+
+    print(f"[{elem}] processing + streaming split...")
+
+    with open(full_seq_path, "w") as full_seq_f:
+        chunk_idx = 0
+        in_chunk = 0
+
+        labels_chunk = np.zeros((split_size, num_targets), dtype=np.uint8)
+        chunk_seq_f = open_chunk_seq(split_dir, elem, feature_name, chunk_idx)
+
+        for record in SeqIO.parse(fasta_path, "fasta"):
+            seq = str(record.seq).upper()
+
+
+            full_seq_f.write(seq + "\n")
+
+            chunk_seq_f.write(seq + "\n")
+
+            left = str(record.id).split("::")[0]
+            if left:
+                for t in left.split(","):
+                    t = t.strip()
+                    if not t:
+                        continue
+
+                    idx = int(t)
+                    if 0 <= idx < num_targets:
+                        labels_chunk[in_chunk, idx] = 1
+            in_chunk += 1
+            if in_chunk == split_size:
+                save_chunk(labels_chunk, in_chunk, split_dir, elem, feature_name, chunk_idx)
+                chunk_seq_f.close()
+
+                chunk_idx += 1
+                in_chunk = 0
+                labels_chunk.fill(0)
+                chunk_seq_f = open_chunk_seq(split_dir, elem, feature_name, chunk_idx)
+
+        if in_chunk > 0:
+            save_chunk(labels_chunk, in_chunk, split_dir, elem, feature_name, chunk_idx)
+        chunk_seq_f.close()
+
+    print(f"[{elem}] done. chunks={chunk_idx + (1 if in_chunk > 0 else 0)}")

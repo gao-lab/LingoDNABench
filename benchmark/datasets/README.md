@@ -275,9 +275,13 @@ Typical steps:
 Example commands (edit paths to match your local layout):
 
 ```bash
+conda install bioconda::bedtools=2.26.0
+wget -c https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49/GRCh38.primary_assembly.genome.fa.gz
+gunzip GRCh38.primary_assembly.genome.fa.gz
+mv  GRCh38.primary_assembly.genome.fa ../data
 # 1) Prepare Basset-style sequence shards
 # sh script/01_process_basset_data.sh <feature_name> <input_dir> <output_dir> <blacklist_bed> <reference_fasta>
-sh script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../data/hg38-blacklist.v2.bed ../data/hg38-genome.fa
+sh script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../data/GRCh38.primary_assembly.genome.fa
 
 # 2) Split into chunks and write index files / metadata
 # python script/02_process_basset_data.py <feature_name> <input_dir> <output_dir> <output_dim> <split_size>
