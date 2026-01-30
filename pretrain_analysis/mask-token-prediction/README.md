@@ -73,6 +73,5 @@ This repo’s current scripts are **BERT-Series**-oriented (MLM masking + masked
 - **MLM models (BERT-like):** direct masked-token prediction as above.
 - **Causal LMs (CLM):**
   - Standard CLM cannot condition on *both sides* of a masked position without modification.
-  - Practical alternatives:
     - **Prefix-only scoring:** score `xᵢ` using only left context (positions `< i`).
 
