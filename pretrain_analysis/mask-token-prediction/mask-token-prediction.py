@@ -82,13 +82,12 @@ d_model = n_heads * d_kv
 '''tokenization'''
 kmer = 1
 if model_type=="human-genome":
-    model_checkpoint = "../../pretrain_gLM/checkpoints/H-4K-13-K1/model_13_610919.pt"
+    model_checkpoint = "../../pretrain_gLM/checkpoints/model_H/model_13_610919.pt"
 if model_type=="RandomWeight":
     model_checkpoint = "../../pretrain_gLM/checkpoints/RandomWeight/model_init_666.pt"
 if model_type=="multi-species":
-    model_checkpoint = "../../pretrain_gLM/checkpoints/MS7-4K-8-K1/model_8_711981.pt"
-if model_type=="RandomSeq":
-    model_checkpoint = "../../pretrain_gLM/checkpoints/RandomSeq/model_0_43637.pt"
+    model_checkpoint = "../../pretrain_gLM/checkpoints/model_M/model_8_711981.pt"
+
 
 def load_model():
     # init model

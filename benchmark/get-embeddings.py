@@ -252,10 +252,10 @@ def run_bert_series():
     config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
     if model_name == "RandomWeight":
         model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/RandomWeight/model_init_666.pt"
-    elif model_name == "MS7-4K-8-K1":
-        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/MS7-4K-8-K1/model_8_711981.pt"
-    elif model_name == "H-4K-13-K1":
-        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/H-4K-13-K1/model_13_610919.pt"
+    elif model_name == "model_M":
+        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_M/model_8_711981.pt"
+    elif model_name == "model_H":
+        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_H/model_13_610919.pt"
     else:
         raise ValueError(model_name)
     model_config = config["model_config"]

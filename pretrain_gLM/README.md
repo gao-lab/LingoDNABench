@@ -38,19 +38,3 @@ python RandomWeight.py \
 --model_save_path ./model/RandomWeight
 ```
 
-### Extract embedding with pretrained gLMs
-Demo: Extract sequence embedding with human gLM.
-```bash
-# get help
-python extract_embedding.py -h
-
-# extract embedding with human gLM
-python extract_embedding.py \
---model_checkpoint ./model/human_gLM/model_0.pt \
---batch_size 256 \
---target_file ./test/test.txt \
---output_file ./test/test_embedding.npy \
---seq_length 200 \
---layer_num -1 \
---mean_mode false
-```

@@ -68,7 +68,7 @@ from BERT.data import  DNADataset, DNATokenizer
 from BERT.model import BaselineBERT
 from BERT.utils import load_config
 config = load_config("../../pretrain_gLM/config/Baseline_gLM.config.json")
-model_dir = "../../pretrain_gLM/checkpoints/MS7-4K-8-K1"
+model_dir = "../../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_M"
 model_version = find_files_with_prefix(
     model_dir, f"model_{epoch}_"
 )[0]
