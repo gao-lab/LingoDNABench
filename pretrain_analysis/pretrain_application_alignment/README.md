@@ -86,7 +86,7 @@ bash run-embed-pretrain-loss.sh
 ```
 
 > Output embeddings will be stored under:
-> `../benchmark/datasets/promoter/prom_300_tata/MS7-4K-8-K1-<epoch>/`
+> `../benchmark/datasets/promoter/prom_300_tata/model_M-<epoch>/`
 
 ---
 
