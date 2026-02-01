@@ -1,16 +1,9 @@
 
-
-# ===============================
-# Global imports & config
-# ===============================
-
 import os
 import sys
-import json
-import time
 import torch
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import IterableDataset, DataLoader
 from transformers import (
     AutoTokenizer,
     AutoModel,
@@ -18,197 +11,355 @@ from transformers import (
     AutoModelForSequenceClassification,
 )
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
+# -------------------------------
+# Device & runtime knobs
+# -------------------------------
+# NOTE: do NOT hardcode CUDA_VISIBLE_DEVICES here; let launcher decide.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-torch.manual_seed(42)
-np.random.seed(42)
+# Control memory via env vars
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))          # default 1 to avoid OOM
+NUM_WORKERS = int(os.getenv("NUM_WORKERS", "0"))        # default 0 (multi-worker can increase RAM)
+PIN_MEMORY = bool(int(os.getenv("PIN_MEMORY", "1"))) if device.type == "cuda" else False
 
-# ===============================
+# Mixed precision for CUDA inference
+USE_AUTOCAST = bool(int(os.getenv("USE_AUTOCAST", "1"))) and device.type == "cuda"
+AUTOCAST_DTYPE = os.getenv("AUTOCAST_DTYPE", "bf16").lower()  # bf16 or fp16
+if AUTOCAST_DTYPE in ("bf16", "bfloat16"):
+    _autocast_dtype = torch.bfloat16
+else:
+    _autocast_dtype = torch.float16
+
+# Optional: avoid fragmentation (helpful on some clusters)
+# export PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb:128,expandable_segments:True"
+
+# -------------------------------
 # CLI arguments
-# ===============================
+# -------------------------------
 model_dir = sys.argv[1]
 model_type = sys.argv[2]
 model_name = sys.argv[3]
 input_seq = sys.argv[4]
 output_dir = sys.argv[5]
-embedding_len = int(sys.argv[6])
-layer = int(sys.argv[7])
+embedding_len = int(sys.argv[6])   # token length expected by benchmark (fixed output length)
+layer = int(sys.argv[7])           # same semantics as old code: hidden_states[layer]
 
 name = os.path.basename(input_seq).split(".")[0]
-output_file = os.path.join(
-    output_dir, f"{name}-embedding-layer_{layer}.npy"
-)
+output_file = os.path.join(output_dir, f"{name}-embedding-layer_{layer}.npy")
 
+os.makedirs(output_dir, exist_ok=True)
 
-batch_size = 4
-
+# If already done, exit quickly
 if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
     sys.exit(0)
 
-# ===============================
-# Dataset definitions
-# ===============================
+# -------------------------------
+# IO helpers: count & iterate sequences without loading all
+# -------------------------------
+def _normalize_line_to_seq(line: str):
+    """Best-effort extraction of sequence from a text/tsv/csv line."""
+    line = line.strip()
+    if not line:
+        return None
+    # skip common headers
+    low = line.lower()
+    if low.startswith("sequence") or low.startswith("seq") and "," in line:
+        # e.g. deepgene csv header "sequence,..."
+        return None
+    if line.startswith(">"):  # fasta header
+        return None
 
-class Caduceus_GFM_Dataset(Dataset):
-    def __init__(self, sequence_path, model_name, embedding_len):
-        from tokenization_caduceus import CaduceusTokenizer
-        self.seqs = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        self.embedding_len = embedding_len
-        self.tokenizer = CaduceusTokenizer.from_pretrained(
-            f"{model_dir}/{model_name}",
-            padding="max_length",
-            max_length=embedding_len + 1,
-        )
+    # prefer first column before tab/comma
+    if "\t" in line:
+        seq = line.split("\t", 1)[0].strip()
+    elif "," in line:
+        seq = line.split(",", 1)[0].strip()
+    else:
+        seq = line
 
-    def __len__(self):
-        return len(self.seqs)
-
-    def __getitem__(self, idx):
-        out = self.tokenizer(
-            self.seqs[idx],
-            return_tensors="pt",
-            padding="max_length",
-            max_length=self.embedding_len + 1,
-        )
-        return out["input_ids"].squeeze(0)
-
-
-class HyenaDNA_GFM_Dataset(Dataset):
-    def __init__(self, sequence_path, model_name, embedding_len):
-        from tokenization_hyena import HyenaDNATokenizer
-        self.seqs = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        self.embedding_len = embedding_len
-        self.tokenizer = HyenaDNATokenizer.from_pretrained(
-            f"{model_dir}/{model_name}",
-            padding="max_length",
-            max_length=embedding_len + 1,
-        )
-
-    def __len__(self):
-        return len(self.seqs)
-
-    def __getitem__(self, idx):
-        out = self.tokenizer(
-            self.seqs[idx],
-            return_tensors="pt",
-            padding="max_length",
-            max_length=self.embedding_len + 1,
-        )
-        return {k: v.squeeze(0) for k, v in out.items()}
+    if not seq:
+        return None
+    return seq
 
 
-class OmniNA_GFM_Dataset(Dataset):
-    def __init__(self, sequence_path, model_name, embedding_len):
-        self.seqs = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        self.embedding_len = embedding_len
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            f"{model_dir}/{model_name}"
-        )
-        self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-
-    def __len__(self):
-        return len(self.seqs)
-
-    def __getitem__(self, idx):
-        out = self.tokenizer(
-            self.seqs[idx],
-            return_tensors="pt",
-            padding="max_length",
-            max_length=self.embedding_len,
-        )
-        return {k: v.squeeze(0)[-self.embedding_len :] for k, v in out.items()}
+def count_sequences(path: str) -> int:
+    n = 0
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            seq = _normalize_line_to_seq(line)
+            if seq is None:
+                continue
+            n += 1
+    return n
 
 
-class NT_GFM_Dataset(Dataset):
-    def __init__(self, sequence_path, tokenizer, embedding_len):
-        self.seqs = np.loadtxt(sequence_path, dtype=str, delimiter="\t")
-        self.embedding_len = embedding_len
-        self.tokenizer = tokenizer
-
-    def __len__(self):
-        return len(self.seqs)
-
-    def __getitem__(self, idx):
-        out = self.tokenizer(
-            self.seqs[idx],
-            return_tensors="pt",
-            padding="max_length",
-            max_length=self.embedding_len + 1,
-        )
-        return {
-            "input_ids": out["input_ids"].squeeze(0)[: self.embedding_len + 1],
-            "attention_mask": out["attention_mask"].squeeze(0)[
-                : self.embedding_len + 1
-            ],
-        }
+def iter_sequences(path: str):
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            seq = _normalize_line_to_seq(line)
+            if seq is None:
+                continue
+            yield seq
 
 
-# ===============================
-# Common embedding runner
-# ===============================
-
-def run_dataloader_embedding(dataloader, extract_fn):
-    total = len(dataloader.dataset)
-    test_flag = True
-    cnt = 0
-
-    with torch.no_grad():
-        for batch in dataloader:
-            if isinstance(batch, dict):
-                batch = {k: v.to(device) for k, v in batch.items()}
+# -------------------------------
+# Optional: capture a single layer via forward hook to avoid output_hidden_states=True
+# Works best for BERT-like encoders. Falls back to hidden_states when not supported.
+# -------------------------------
+def _get_encoder_layers(model):
+    # try common attribute paths (HF BERT/Roberta/Deberta/etc.)
+    candidates = [
+        ("encoder", "layer"),
+        ("bert", "encoder", "layer"),
+        ("roberta", "encoder", "layer"),
+        ("deberta", "encoder", "layer"),
+        ("backbone", "encoder", "layer"),
+    ]
+    for path in candidates:
+        obj = model
+        ok = True
+        for p in path:
+            if hasattr(obj, p):
+                obj = getattr(obj, p)
             else:
-                batch = batch.to(device)
-
-            temp = extract_fn(batch).cpu().detach().numpy()
-            num = temp.shape[0]
-
-            if test_flag:
-                result = np.zeros(
-                    (total, temp.shape[1], temp.shape[2]), dtype=np.float32
-                )
-                test_flag = False
-
-            result[cnt : cnt + num] = temp
-            cnt += num
-
-    return result
+                ok = False
+                break
+        if ok and isinstance(obj, (list, torch.nn.ModuleList)):
+            return obj
+    return None
 
 
-# ===============================
-# Model runners
-# ===============================
+def make_extract_fn(model, kind: str):
+    """
+    Return a function extract(batch)->Tensor[B, embedding_len, hidden]
+    kind: 'nt', 'caduceus', 'hyenadna', 'omnina', ...
+    """
+    use_hook = bool(int(os.getenv("CAPTURE_LAYER_HOOK", "1")))
+    layers = _get_encoder_layers(model) if use_hook else None
 
+    # The old code used hidden_states[layer]. In HF, hidden_states[0] is embeddings,
+    # hidden_states[1] is output of first transformer block, ... hidden_states[-1] last block.
+    # Hook can only capture transformer blocks, not embedding output; for layer==0 we fallback.
+    wants_embedding_output = (layer == 0)
+
+    if layers is None or wants_embedding_output:
+        # Fallback: request all hidden_states (higher memory)
+        def _extract_hidden_states(outputs):
+            hs = outputs.hidden_states
+            if kind == "nt":
+                return hs[layer][:, 1:1 + embedding_len, :]
+            elif kind in ("caduceus", "hyenadna"):
+                return hs[layer][:, :-1, :]
+            elif kind == "omnina":
+                # already tokenized to embedding_len
+                return hs[layer][:, :embedding_len, :]
+            else:
+                return hs[layer][:, :embedding_len, :]
+
+        def extract(batch):
+            outputs = model(**batch, output_hidden_states=True, return_dict=True)
+            out = _extract_hidden_states(outputs)
+            return out
+
+        return extract
+
+    # Hook path: capture a single transformer block output
+    # Map hidden_states index -> encoder layer index
+    if layer > 0:
+        enc_idx = layer - 1
+    else:
+        enc_idx = layer  # negative indexing works for ModuleList
+    # Normalize negative index
+    if enc_idx < 0:
+        enc_idx = len(layers) + enc_idx
+    enc_idx = max(0, min(enc_idx, len(layers) - 1))
+
+    captured = {"tensor": None}
+
+    def _hook(_module, _inp, out):
+        # out may be tuple or tensor
+        t = out[0] if isinstance(out, (tuple, list)) else out
+        captured["tensor"] = t
+
+    handle = layers[enc_idx].register_forward_hook(_hook)
+
+    def extract(batch):
+        captured["tensor"] = None
+        _ = model(**batch, output_hidden_states=False, return_dict=True)
+        t = captured["tensor"]
+        if t is None:
+            # safety fallback
+            outputs = model(**batch, output_hidden_states=True, return_dict=True)
+            t = outputs.hidden_states[layer]
+        if kind == "nt":
+            t = t[:, 1:1 + embedding_len, :]
+        elif kind in ("caduceus", "hyenadna"):
+            t = t[:, :-1, :]
+        elif kind == "omnina":
+            t = t[:, :embedding_len, :]
+        else:
+            t = t[:, :embedding_len, :]
+        return t
+
+    # ensure hook removed at process exit
+    import atexit
+    atexit.register(lambda: handle.remove())
+    return extract
+
+
+# -------------------------------
+# Iterable datasets (stream tokenization)
+# -------------------------------
+class TextSeqIterable(IterableDataset):
+    def __init__(self, path: str):
+        super().__init__()
+        self.path = path
+
+    def __iter__(self):
+        yield from iter_sequences(self.path)
+
+
+class TokenizeIterable(IterableDataset):
+    """
+    Stream sequences -> tokenized batch items (dict of tensors).
+    tokenizer: HF tokenizer-like
+    max_length: int
+    """
+    def __init__(self, seq_path: str, tokenizer, max_length: int, add_pad_token: bool = False):
+        super().__init__()
+        self.seq_path = seq_path
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.add_pad_token = add_pad_token
+        if add_pad_token:
+            # Some tokenizers (OmniNA) may need explicit pad token
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+
+    def __iter__(self):
+        for seq in iter_sequences(self.seq_path):
+            out = self.tokenizer(
+                seq,
+                return_tensors="pt",
+                padding="max_length",
+                truncation=True,
+                max_length=self.max_length,
+            )
+            # squeeze batch dim
+            yield {k: v.squeeze(0) for k, v in out.items()}
+
+
+def _collate_dict(batch_list):
+    # batch_list is list of dict[tensor]
+    keys = batch_list[0].keys()
+    return {k: torch.stack([b[k] for b in batch_list], dim=0) for k in keys}
+
+
+# -------------------------------
+# Core: stream embeddings to disk via .npy memmap
+# -------------------------------
+from numpy.lib.format import open_memmap
+
+def stream_to_memmap(total: int, hidden_size: int, dataloader, extract_fn):
+    """
+    Write embeddings directly to output_file using np memmap.
+    Shape: (total, embedding_len, hidden_size)
+    """
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0  # initialize
+
+    idx = 0
+    autocast_ctx = (
+        torch.autocast(device_type="cuda", dtype=_autocast_dtype) if USE_AUTOCAST else torch.no_grad()
+    )
+
+    # Use inference_mode for best memory behavior
+    with torch.inference_mode():
+        for batch in dataloader:
+            batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+            if USE_AUTOCAST:
+                with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                    emb = extract_fn(batch)
+            else:
+                emb = extract_fn(batch)
+
+            emb = emb.detach().float().cpu().numpy()  # float32 on disk
+            bsz = emb.shape[0]
+
+            # emb is expected to be [B, embedding_len, H]
+            mm[idx: idx + bsz, :, :] = emb[:, :embedding_len, :]
+
+            idx += bsz
+
+            # Help free GPU memory quickly
+            del emb, batch
+
+    mm.flush()
+    return output_file
+
+
+# -------------------------------
+# Model runners (memory-optimized)
+# -------------------------------
 def run_caduceus():
+    # Caduceus uses custom tokenizer in your repo
     sys.path.append(f"{model_dir}/{model_name}")
+    from tokenization_caduceus import CaduceusTokenizer
+
+    tokenizer = CaduceusTokenizer.from_pretrained(
+        f"{model_dir}/{model_name}",
+        padding="max_length",
+        max_length=embedding_len + 1,
+    )
+
     model = AutoModelForMaskedLM.from_pretrained(
         f"{model_dir}/{model_name}", trust_remote_code=True
     ).to(device).eval()
 
-    dataset = Caduceus_GFM_Dataset(input_seq, model_name, embedding_len)
-    loader = DataLoader(dataset, batch_size=batch_size)
+    total = count_sequences(input_seq)
+    hidden_size = model.config.hidden_size
 
-    def extract(batch):
-        hs = model(batch, output_hidden_states=True)["hidden_states"]
-        return hs[layer][:, :-1, :]
+    ds = TokenizeIterable(input_seq, tokenizer, max_length=embedding_len + 1)
+    dl = DataLoader(
+        ds,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        collate_fn=_collate_dict,
+    )
 
-    return run_dataloader_embedding(loader, extract)
+    extract_fn = make_extract_fn(model, kind="caduceus")
+    return stream_to_memmap(total, hidden_size, dl, extract_fn)
 
 
 def run_hyenadna():
+    sys.path.append(f"{model_dir}/{model_name}")
+    from tokenization_hyena import HyenaDNATokenizer
+
+    tokenizer = HyenaDNATokenizer.from_pretrained(
+        f"{model_dir}/{model_name}",
+        padding="max_length",
+        max_length=embedding_len + 1,
+    )
+
     model = AutoModelForSequenceClassification.from_pretrained(
         f"{model_dir}/{model_name}", trust_remote_code=True
     ).to(device).eval()
-    sys.path.append(f"{model_dir}/{model_name}")
-    dataset = HyenaDNA_GFM_Dataset(input_seq, model_name, embedding_len)
-    loader = DataLoader(dataset, batch_size=batch_size)
 
-    def extract(batch):
-        hs = model(**batch, output_hidden_states=True)["hidden_states"]
-        return hs[layer][:, :-1, :]
+    total = count_sequences(input_seq)
+    hidden_size = model.config.hidden_size
 
-    return run_dataloader_embedding(loader, extract)
+    ds = TokenizeIterable(input_seq, tokenizer, max_length=embedding_len + 1)
+    dl = DataLoader(
+        ds,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        collate_fn=_collate_dict,
+    )
+
+    extract_fn = make_extract_fn(model, kind="hyenadna")
+    return stream_to_memmap(total, hidden_size, dl, extract_fn)
 
 
 def run_nt():
@@ -219,36 +370,51 @@ def run_nt():
         f"{model_dir}/{model_name}", trust_remote_code=True
     ).to(device).eval()
 
-    dataset = NT_GFM_Dataset(input_seq, tokenizer, embedding_len)
-    loader = DataLoader(dataset, batch_size=batch_size)
+    total = count_sequences(input_seq)
+    hidden_size = model.config.hidden_size
 
-    def extract(batch):
-        hs = model(**batch, output_hidden_states=True)["hidden_states"]
-        return hs[layer][:, 1 : 1 + embedding_len, :]
+    ds = TokenizeIterable(input_seq, tokenizer, max_length=embedding_len + 1)
+    dl = DataLoader(
+        ds,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        collate_fn=_collate_dict,
+    )
 
-    return run_dataloader_embedding(loader, extract)
+    extract_fn = make_extract_fn(model, kind="nt")
+    return stream_to_memmap(total, hidden_size, dl, extract_fn)
 
 
 def run_omnina():
+    tokenizer = AutoTokenizer.from_pretrained(f"{model_dir}/{model_name}")
     model = AutoModel.from_pretrained(
         f"{model_dir}/{model_name}", trust_remote_code=True
     ).to(device).eval()
 
-    dataset = OmniNA_GFM_Dataset(input_seq, model_name, embedding_len)
-    loader = DataLoader(dataset, batch_size=batch_size)
+    total = count_sequences(input_seq)
+    hidden_size = model.config.hidden_size
 
-    def extract(batch):
-        hs = model(**batch, output_hidden_states=True)["hidden_states"]
-        return hs[layer]
+    ds = TokenizeIterable(input_seq, tokenizer, max_length=embedding_len, add_pad_token=True)
+    dl = DataLoader(
+        ds,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        collate_fn=_collate_dict,
+    )
 
-    return run_dataloader_embedding(loader, extract)
+    extract_fn = make_extract_fn(model, kind="omnina")
+    return stream_to_memmap(total, hidden_size, dl, extract_fn)
 
 
 def run_bert_series():
-    sys.path.append('../pretrain_gLM')
-    from BERT.data import  DNADataset, DNATokenizer
+    # Your internal BERT-series code path (keep logic, but stream & memmap)
+    sys.path.append("../pretrain_gLM")
+    from BERT.data import DNADataset, DNATokenizer
     from BERT.model import BaselineBERT
     from BERT.utils import load_config
+
     config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
     if model_name == "RandomWeight":
         model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/RandomWeight/model_init_666.pt"
@@ -258,310 +424,286 @@ def run_bert_series():
         model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_H/model_13_610919.pt"
     else:
         raise ValueError(model_name)
+
     model_config = config["model_config"]
-    d_kv = model_config['d_kv']
-    n_heads = model_config['n_heads']
-    n_layers = model_config['n_layers']
-    max_vocab = model_config['max_vocab']
+    d_kv = model_config["d_kv"]
+    n_heads = model_config["n_heads"]
+    n_layers = model_config["n_layers"]
+    max_vocab = model_config["max_vocab"]
     d_model = n_heads * d_kv
-    kmer = model_config['kmer']
+    kmer = model_config["kmer"]
 
     def load_model():
-        # init model
-        print("Initializing model and loading checkpoint...")
-
-        model = BaselineBERT(max_vocab, n_heads, d_kv, n_layers, eval_mode=True)
-        model.to(device)
-        
-        # loading checkpoint
+        model = BaselineBERT(max_vocab, n_heads, d_kv, n_layers, eval_mode=True).to(device)
         checkpoint = torch.load(model_checkpoint, map_location=device)
-        state_dict = checkpoint['model_state_dict']
-        
-        # remove unused keys
+        state_dict = checkpoint["model_state_dict"]
         model_state = model.state_dict()
         state_dict = {k: v for k, v in state_dict.items() if k in model_state}
         model_state.update(state_dict)
         model.load_state_dict(model_state)
-        
-        return model
-    
-    
+        return model.eval()
 
-    dna_tokenizer = DNATokenizer(kmer = kmer)
-    # default: no padding
-    seqs = np.loadtxt(input_seq, dtype=str)
+    dna_tokenizer = DNATokenizer(kmer=kmer)
     seq_dataset = DNADataset(dna_tokenizer, input_seq, data_type="seq", eval_mode=True)
-    seq_data_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+
+    # NOTE: num_workers>0 often increases RAM usage due to dataset pickling/caching
+    dl = DataLoader(seq_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+
+    total = len(seq_dataset)
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, d_model))
+    mm[:] = 0.0
+
     model = load_model()
-    model.eval().cuda()
-    
-    result = np.zeros((len(seqs), embedding_len, d_model), dtype=np.float32)
 
-    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-        with torch.no_grad():
-            for i, batch in enumerate(seq_data_loader):
-                emb = model(batch[0].cuda())[layer][:, 1:1 + embedding_len, :]
-                result[
-                    i * batch_size : i * batch_size + emb.shape[0]
-                ] = emb.cpu().numpy()
+    with torch.inference_mode():
+        if USE_AUTOCAST:
+            with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                for i, batch in enumerate(dl):
+                    emb = model(batch[0].to(device))[layer][:, 1:1 + embedding_len, :]
+                    emb = emb.detach().float().cpu().numpy()
+                    bsz = emb.shape[0]
+                    mm[i * BATCH_SIZE: i * BATCH_SIZE + bsz] = emb
+        else:
+            for i, batch in enumerate(dl):
+                emb = model(batch[0].to(device))[layer][:, 1:1 + embedding_len, :]
+                emb = emb.detach().float().cpu().numpy()
+                bsz = emb.shape[0]
+                mm[i * BATCH_SIZE: i * BATCH_SIZE + bsz] = emb
 
-    return result
+    mm.flush()
+    return output_file
+
 
 def run_dnabert():
-    tokenizer = AutoTokenizer.from_pretrained(f"{model_dir}/{model_name}",local_files_only=True)
-    model = AutoModel.from_pretrained(f"{model_dir}/{model_name}",local_files_only=True)
-    model.to(device).eval()
+    tokenizer = AutoTokenizer.from_pretrained(f"{model_dir}/{model_name}", local_files_only=True)
+    model = AutoModel.from_pretrained(f"{model_dir}/{model_name}", local_files_only=True).to(device).eval()
 
     k_mers = int(model_name.split("_")[-1])
-    seqs = np.loadtxt(input_seq, dtype=str)
+    total = count_sequences(input_seq)
+    hidden_size = model.config.hidden_size
 
-    result = np.zeros((len(seqs), embedding_len, model.config.hidden_size))
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0
 
     def tokenize(seq):
-        kmers = " ".join(
-            seq[i:i + k_mers] for i in range(len(seq) - k_mers + 1)
-        )
-        return tokenizer(
-            kmers,
-            return_tensors="pt",
-            padding="max_length",
-            max_length=embedding_len,
-        )
+        kmers = " ".join(seq[i:i + k_mers] for i in range(len(seq) - k_mers + 1))
+        return tokenizer(kmers, return_tensors="pt", padding="max_length", truncation=True, max_length=embedding_len)
 
-    with torch.no_grad():
-        for i, seq in enumerate(seqs):
+    idx = 0
+    with torch.inference_mode():
+        for seq in iter_sequences(input_seq):
             x = tokenize(seq)
             x = {k: v.to(device) for k, v in x.items()}
-            hs = model(**x, output_hidden_states=True)["hidden_states"]
-            result[i] = hs[layer][0, 1:-1, :].cpu().numpy()
+            if USE_AUTOCAST:
+                with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                    outputs = model(**x, output_hidden_states=True, return_dict=True)
+            else:
+                outputs = model(**x, output_hidden_states=True, return_dict=True)
+            hs = outputs.hidden_states
+            # keep same slicing as old code
+            temp = hs[layer][0, 1:-1, :].detach().float().cpu().numpy()
+            L = min(temp.shape[0], embedding_len)
+            mm[idx, :L, :] = temp[:L, :]
+            idx += 1
 
-    return result
+    mm.flush()
+    return output_file
+
 
 def run_deepgene():
     sys.path.append(f"{model_dir}/DeepGene-main/PanGeneGraphTrans")
     from modeling_roformer import RoFormerForMaskedLM
-    import tokenizers
+    from tokenizers import Tokenizer
 
     param_file = f"{model_dir}/DeepGene-main/model/pretrain_params_epoch_20"
     model = RoFormerForMaskedLM.from_pretrained(param_file).to(device).eval()
 
-    # 原始 graph dataset 构造逻辑
-    from numpy.lib.format import open_memmap
+    tok = Tokenizer.from_file(f"{model_dir}/DeepGene-main/data/vocab/tokenizer.json")
+    total = count_sequences(input_seq)
+    hidden_size = model.config.hidden_size
 
-    def load_dataset():
-        from tokenizers import Tokenizer
-        graphs = []
-        tokenizer = Tokenizer.from_file(
-            f"{model_dir}/DeepGene-main/data/vocab/tokenizer.json"
-        )
-        with open(input_seq) as f:
-            for line in f:
-                if line.startswith("sequence"):
-                    continue
-                ids = tokenizer.encode(line.strip().split(",")[0]).ids
-                ids = torch.tensor(ids[: embedding_len], dtype=torch.long)
-                graphs.append({
-                    "input_ids": ids,
-                    "attention_mask": torch.ones_like(ids),
-                })
-        return graphs
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0
 
-    graphs = load_dataset()
-    result = np.zeros((len(graphs), embedding_len, model.config.hidden_size))
+    idx = 0
+    with torch.inference_mode():
+        for line in open(input_seq, "r", encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            if line.lower().startswith("sequence"):
+                continue
+            seq = line.split(",", 1)[0].strip()
+            if not seq:
+                continue
 
-    with torch.no_grad():
-        for i, g in enumerate(graphs):
-            g = {k: v.unsqueeze(0).to(device) for k, v in g.items()}
-            hs = model(**g, output_hidden_states=True)["hidden_states"]
-            result[i] = hs[layer][0, :embedding_len, :].cpu().numpy()
+            ids = tok.encode(seq).ids[:embedding_len]
+            input_ids = torch.tensor(ids, dtype=torch.long, device=device).unsqueeze(0)
+            attn = torch.ones_like(input_ids)
 
-    return result
+            if USE_AUTOCAST:
+                with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                    outputs = model(input_ids=input_ids, attention_mask=attn, output_hidden_states=True, return_dict=True)
+            else:
+                outputs = model(input_ids=input_ids, attention_mask=attn, output_hidden_states=True, return_dict=True)
+
+            hs = outputs.hidden_states
+            temp = hs[layer][0, :embedding_len, :].detach().float().cpu().numpy()
+            L = min(temp.shape[0], embedding_len)
+            mm[idx, :L, :] = temp[:L, :]
+            idx += 1
+
+    mm.flush()
+    return output_file
+
 
 def run_dnabert2():
-    from transformers import BertConfig
-
     model_path = f"{model_dir}/DNABERT-2-117M"
 
-    model = AutoModel.from_pretrained(
-        model_path,
-        trust_remote_code=True,local_files_only=True
-    ).to(device).eval()
+    model = AutoModel.from_pretrained(model_path, trust_remote_code=True, local_files_only=True).to(device).eval()
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, model_max_length=embedding_len, local_files_only=True)
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-        model_max_length=embedding_len,local_files_only=True
-    )
-
-    seqs = np.loadtxt(input_seq, dtype=str)
+    total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    
-    result = np.zeros(
-        (len(seqs), embedding_len, hidden_size),
-        dtype=np.float32,
-    )
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0
 
-    with torch.no_grad():
-        for i, seq in enumerate(seqs):
-            x = tokenizer(seq, return_tensors="pt")
+    idx = 0
+    with torch.inference_mode():
+        for seq in iter_sequences(input_seq):
+            x = tokenizer(seq, return_tensors="pt", truncation=True, max_length=embedding_len + 2)
             x = {k: v.to(device) for k, v in x.items()}
-            encoded_layers = model(
-                **x,return_dict=True
-            )
-            # encoded_layers[layer]: [seq_len+2, hidden]
-            seq_len = x["input_ids"].shape[1] - 2
 
-            temp = (
-                encoded_layers[0][0,1:-1, :]
-                .detach()
-                .cpu()
-                .numpy()
-            )
+            if USE_AUTOCAST:
+                with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                    outputs = model(**x, return_dict=True)
+            else:
+                outputs = model(**x, return_dict=True)
 
-            result[i, 0:seq_len, :] = temp
+            # outputs[0] is last_hidden_state: [1, L, H]
+            # old code used encoded_layers[0][0,1:-1,:]
+            last = outputs[0][0, 1:-1, :].detach().float().cpu().numpy()
+            L = min(last.shape[0], embedding_len)
+            mm[idx, :L, :] = last[:L, :]
+            idx += 1
 
-    return result
+    mm.flush()
+    return output_file
+
 
 def run_generator():
-    from transformers import AutoTokenizer, AutoModel
-
     model_path = f"/lustre/grp/gglab/liangyx/data/benchmark/{model_name}"
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-    )
-    model = AutoModel.from_pretrained(
-        model_path,
-        trust_remote_code=True,
-    ).to(device).eval()
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(device).eval()
 
-    seqs = np.loadtxt(input_seq, dtype=str)
+    total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
-    token_len = embedding_len
 
-    result = np.zeros(
-        (len(seqs), token_len, hidden_size),
-        dtype=np.float32,
-    )
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0
 
     tokenizer.padding_side = "right"
 
+    idx = 0
     with torch.inference_mode():
-        for i, seq in enumerate(seqs):
+        for seq in iter_sequences(input_seq):
             inputs = tokenizer(
                 [seq],
                 add_special_tokens=True,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=model.config.max_position_embeddings,
+                max_length=min(model.config.max_position_embeddings, embedding_len + 2),
             )
             inputs = {k: v.to(device) for k, v in inputs.items()}
 
-            outputs = model(**inputs, output_hidden_states=True)
-            hidden_states = outputs.hidden_states
+            if USE_AUTOCAST:
+                with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                    outputs = model(**inputs, output_hidden_states=True, return_dict=True)
+            else:
+                outputs = model(**inputs, output_hidden_states=True, return_dict=True)
 
-            
-            result[i, :, :] = (
-                hidden_states[layer][0, 1:1 + token_len, :]
-                .detach()
-                .cpu()
-                .numpy()
-            )
+            hs = outputs.hidden_states
+            temp = hs[layer][0, 1:1 + embedding_len, :].detach().float().cpu().numpy()
+            L = min(temp.shape[0], embedding_len)
+            mm[idx, :L, :] = temp[:L, :]
+            idx += 1
 
-    return result
+    mm.flush()
+    return output_file
 
 
 def run_evo2():
     from evo2 import Evo2
     model_path = f"{model_dir}/{model_name}"
-    model = Evo2('evo2_7b',local_path=f"{model_path}.pt")
-    layer_name=layer# 7b
-    model=model.cuda()
-    model=model.eval()
-    seqs = np.loadtxt(input_seq, dtype=str)
+    model = Evo2("evo2_7b", local_path=f"{model_path}.pt").cuda().eval()
+
+    total = count_sequences(input_seq)
     hidden_size = 4096
-    token_len = embedding_len
 
-    result = np.zeros(
-        (len(seqs), token_len, hidden_size),
-        dtype=np.float32,
-    )
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0
 
-    with torch.no_grad():
-        for i, seq in enumerate(seqs):
-            input_ids = torch.tensor(
-                model.tokenizer.tokenize(seq),
-                dtype=torch.int,
-            ).unsqueeze(0).to('cuda:0')
+    idx = 0
+    with torch.inference_mode():
+        for seq in iter_sequences(input_seq):
+            input_ids = torch.tensor(model.tokenizer.tokenize(seq), dtype=torch.int, device="cuda:0").unsqueeze(0)
+            outputs, embeddings = model(input_ids, return_embeddings=True, layer_names=[layer])
+            temp = embeddings[layer][0, 1:1 + embedding_len, :].detach().float().cpu().numpy()
+            L = min(temp.shape[0], embedding_len)
+            mm[idx, :L, :] = temp[:L, :]
+            idx += 1
 
-            outputs,embeddings = model(input_ids, return_embeddings=True, layer_names=[layer_name])
-            
-            result[i, :, :] = (
-                embeddings[layer_name][0, 1:1 + token_len, :]
-                .detach()
-                .cpu()
-                .numpy()
-            )
-
-    return result
+    mm.flush()
+    return output_file
 
 
 def run_lucaone_hf():
-    import numpy as np
-    import torch
     from lucagplm import LucaGPLMModel, LucaGPLMTokenizer
-
     model_name_hf = f"{model_dir}/LucaOne-default-step36M"
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = LucaGPLMModel.from_pretrained(model_name_hf).to(device).eval()
+    tokenizer = LucaGPLMTokenizer.from_pretrained(model_name_hf)
 
-    # Load model & tokenizer (HF official)
-    model = LucaGPLMModel.from_pretrained(
-        model_name_hf,
-    ).to(device).eval()
-
-    tokenizer = LucaGPLMTokenizer.from_pretrained(
-        model_name_hf
-    )
-
-    # Load sequences
-    seqs = np.loadtxt(input_seq, dtype=str)
+    total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    # Fixed-length output (benchmark aligned)
-    result = np.zeros(
-        (len(seqs), embedding_len, hidden_size),
-        dtype=np.float32,
-    )
+    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
+    mm[:] = 0.0
 
-    with torch.no_grad():
-        for i, seq in enumerate(seqs):
+    idx = 0
+    with torch.inference_mode():
+        for seq in iter_sequences(input_seq):
             inputs = tokenizer(
                 seq,
                 seq_type="gene",
                 return_tensors="pt",
                 truncation=True,
-                max_length=embedding_len + 2,  # CLS + EOS
+                max_length=embedding_len + 2,
             )
             inputs = {k: v.to(device) for k, v in inputs.items()}
 
-            outputs = model(**inputs)
+            if USE_AUTOCAST:
+                with torch.autocast(device_type="cuda", dtype=_autocast_dtype):
+                    outputs = model(**inputs)
+            else:
+                outputs = model(**inputs)
 
-            # last_hidden_state: [1, L+2, H]
             token_emb = outputs.last_hidden_state[:, 1:-1, :]
+            temp = token_emb[0, :embedding_len, :].detach().float().cpu().numpy()
+            L = min(temp.shape[0], embedding_len)
+            mm[idx, :L, :] = temp[:L, :]
+            idx += 1
 
-            L = min(token_emb.shape[1], embedding_len)
-            result[i, :L, :] = token_emb[:, :L, :].cpu().numpy()
+    mm.flush()
+    return output_file
 
-    return result
 
-# ===============================
+# -------------------------------
 # Dispatcher
-# ===============================
-
+# -------------------------------
 RUNNERS = {
     "bert-series": run_bert_series,
     "dnabert": run_dnabert,
@@ -579,5 +721,7 @@ RUNNERS = {
 if model_type not in RUNNERS:
     raise ValueError(f"Unsupported model_type: {model_type}")
 
-result = RUNNERS[model_type]()
-np.save(output_file, result.astype(np.float32))
+RUNNERS[model_type]()
+
+# output already written as .npy memmap at output_file
+print(f"[OK] saved: {output_file}")
