@@ -63,6 +63,14 @@ Instead, each gLM is evaluated in its own validated environment, following the o
 ### 3.1 bert-series Environment
 
 ```bash
+#download the checkpoints of BERT-Series models
+wget -r -np -nH --cut-dirs=3 -R "index.html*"  \
+  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/BERT-155M-Series/"
+
+```
+
+
+```bash
 conda create -n bert-series python=3.9 pip -c conda-forge
 conda activate bert-series
 

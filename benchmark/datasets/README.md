@@ -12,10 +12,10 @@ http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/datasets/
 ### Download with `wget`
 
 ```bash
-# Example: download everything under the directory
-# (This may be large; consider downloading only the datasets you need.)
-wget -r -np -nH --cut-dirs=2 -R "index.html*" -P ./datasets \
-  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/"
+wget -r -np -nH --cut-dirs=3 -R "index.html*"  \
+  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/datasets/"
+
+
 ```
 
 
