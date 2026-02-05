@@ -10,10 +10,6 @@ Process data and construct human and multi-species training dataset.
 sh prepare_genome_dataset.sh
 ```
 
-Construct random sequence dataset.
-```bash
-sh prepare_random_dataset.sh
-```
 ### Train gLMs
 Train gLM with human and multi-species training dataset.
 ```bash
