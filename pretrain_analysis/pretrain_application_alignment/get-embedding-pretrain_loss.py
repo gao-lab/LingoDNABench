@@ -1,8 +1,4 @@
 
-# ============================================================
-# Imports & Environment
-# ============================================================
-
 import os
 import sys
 import time
@@ -10,27 +6,46 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-# ============================================================
-# Argument Parsing (compatible with original)
-# ============================================================
 
-input_seq = sys.argv[1]
-output_dir = sys.argv[2]
-embedding_len = int(sys.argv[3])
-layer = int(sys.argv[4])
-epoch = int(sys.argv[5])
+def _parse_args(argv):
+    input_seq = argv[1]
+    output_dir = argv[2]
+    embedding_len = int(argv[3])
+    layer = int(argv[4])
+    epoch = int(argv[5])
+
+    # default format from env
+    save_format = "npy"
+
+    # parse extra args
+    extra = argv[6:]
+    for i, tok in enumerate(extra):
+        if tok in ("--save_format", "--format"):
+            if i + 1 >= len(extra):
+                raise SystemExit(f"Error: {tok} requires a value (npy or h5).")
+            save_format = extra[i + 1].strip().lower()
+
+    if save_format not in ("npy", "h5"):
+        raise SystemExit("Error: --save_format/--format must be one of: npy, h5")
+
+    return input_seq, output_dir, embedding_len, layer, epoch, save_format
+
+
+input_seq, output_dir, embedding_len, layer, epoch, save_format = _parse_args(sys.argv)
 
 # If True: mean over token dimension, output shape (N, d_model)
 mean_mode = False
 
 name = os.path.basename(input_seq).split(".")[0]
-output_file = os.path.join(output_dir, f"{name}-embedding-layer_{layer}.npy")
+ext = ".npy" if save_format == "npy" else ".h5"
+output_file = os.path.join(output_dir, f"{name}-embedding-layer_{layer}{ext}")
 
 # Skip if already produced
 if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
     sys.exit(0)
 
 os.makedirs(output_dir, exist_ok=True)
+
 
 # ============================================================
 # Device & Tunables
@@ -61,6 +76,7 @@ save_np_dtype = np.float16 if save_dtype == "float16" else np.float32
 
 # Optional: skip counting by setting TOTAL_SEQ
 total_seq_env = os.environ.get("TOTAL_SEQ")
+
 
 # ============================================================
 # Utility Functions
@@ -120,6 +136,7 @@ max_vocab = model_config["max_vocab"]
 d_model = n_heads * d_kv
 kmer = model_config["kmer"]
 
+
 # ============================================================
 # Model Loader
 # ============================================================
@@ -169,33 +186,72 @@ def build_dataloader(seq_path):
 
 
 # ============================================================
-# Output Buffer Allocation (memmap .npy)
+# Output Allocation (memmap .npy OR streaming .h5)
 # ============================================================
 
-def allocate_output_memmap(seq_num):
+def get_output_shape(seq_num: int):
+    if mean_mode:
+        return (seq_num, d_model)
+    return (seq_num, embedding_len, d_model)
+
+
+def allocate_output_npy(seq_num: int):
     """
     Allocate output as a .npy memmap so we don't keep a huge array in RAM.
     """
-    if mean_mode:
-        shape = (seq_num, d_model)
-    else:
-        shape = (seq_num, embedding_len, d_model)
-
-    # Create .npy with header + memmap view
+    shape = get_output_shape(seq_num)
     mm = np.lib.format.open_memmap(
         output_file, mode="w+", dtype=save_np_dtype, shape=shape
     )
     return mm
 
 
+def allocate_output_h5(seq_num: int):
+    """
+    Allocate output as an HDF5 dataset and stream-write slices.
+    """
+    try:
+        import h5py
+    except Exception as e:
+        raise RuntimeError(
+            "Saving to .h5 requires 'h5py'. Install it via: pip install h5py"
+        ) from e
+
+    shape = get_output_shape(seq_num)
+
+    # A small, safe default chunk size along the first dimension.
+    chunk0 = max(1, min(batch_size, seq_num))
+    if mean_mode:
+        chunks = (chunk0, d_model)
+    else:
+        chunks = (chunk0, embedding_len, d_model)
+
+    f = h5py.File(output_file, "w")
+    dset = f.create_dataset(
+        "embeddings",
+        shape=shape,
+        dtype=save_np_dtype,
+        chunks=chunks,
+    )
+
+    # Basic metadata (kept minimal)
+    f.attrs["input_seq"] = str(input_seq)
+    f.attrs["layer"] = int(layer)
+    f.attrs["epoch"] = int(epoch)
+    f.attrs["embedding_len"] = int(embedding_len)
+    f.attrs["mean_mode"] = bool(mean_mode)
+    f.attrs["save_dtype"] = str(save_dtype)
+
+    return f, dset
+
+
 # ============================================================
 # Embedding Extraction (streaming write)
 # ============================================================
 
-def extract_embeddings(model, dataloader, out_mm):
+def extract_embeddings(model, dataloader, seq_num, out_npy_mm=None, out_h5_f=None, out_h5_ds=None):
     """
-    Stream embeddings to disk via memmap.
-    Keeps peak RAM low; GPU memory mainly depends on model+batch+seq_len.
+    Stream embeddings to disk. Keeps peak RAM low; GPU memory mainly depends on model+batch+seq_len.
     """
     print("Extracting embedding...")
     model.to(device)
@@ -205,7 +261,6 @@ def extract_embeddings(model, dataloader, out_mm):
     if device.type == "cuda" and use_autocast:
         ac = torch.autocast(device_type="cuda", dtype=get_autocast_dtype())
     else:
-        # no-op context manager
         from contextlib import nullcontext
         ac = nullcontext()
 
@@ -225,13 +280,17 @@ def extract_embeddings(model, dataloader, out_mm):
                     emb = embedding[layer][:, 1 : 1 + embedding_len, :]
                     emb = torch.mean(emb, dim=1)  # (B, d_model)
                     emb_np = emb.detach().cpu().to(torch.float32).numpy()
-                    bsz = emb_np.shape[0]
-                    out_mm[write_pos : write_pos + bsz] = emb_np.astype(save_np_dtype, copy=False)
                 else:
                     emb = embedding[layer][:, 1 : 1 + embedding_len, :]  # (B, L, d_model)
                     emb_np = emb.detach().cpu().to(torch.float32).numpy()
-                    bsz = emb_np.shape[0]
-                    out_mm[write_pos : write_pos + bsz] = emb_np.astype(save_np_dtype, copy=False)
+
+                bsz = emb_np.shape[0]
+
+                # Write slice
+                if save_format == "npy":
+                    out_npy_mm[write_pos : write_pos + bsz] = emb_np.astype(save_np_dtype, copy=False)
+                else:
+                    out_h5_ds[write_pos : write_pos + bsz] = emb_np.astype(save_np_dtype, copy=False)
 
                 write_pos += bsz
 
@@ -239,13 +298,16 @@ def extract_embeddings(model, dataloader, out_mm):
                 del embedding, emb, emb_np, input_ids
 
                 if device.type == "cuda" and (idx + 1) % 50 == 0:
-                    # Occasionally clear cache to reduce fragmentation (don't do every step)
                     torch.cuda.empty_cache()
 
-    if write_pos != out_mm.shape[0]:
-        print(f"[WARN] wrote {write_pos} samples, expected {out_mm.shape[0]}")
+    if write_pos != seq_num:
+        print(f"[WARN] wrote {write_pos} samples, expected {seq_num}")
 
-    out_mm.flush()
+    # Flush
+    if save_format == "npy":
+        out_npy_mm.flush()
+    else:
+        out_h5_f.flush()
 
 
 # ============================================================
@@ -257,12 +319,18 @@ def main():
     print(model)
 
     dataloader, seq_num = build_dataloader(input_seq)
-    out_mm = allocate_output_memmap(seq_num)
 
-    extract_embeddings(model, dataloader, out_mm)
-
-    # memmap already saved as output_file; flush ensures data is written.
-    print(f"[INFO] Saved embeddings to: {output_file} (dtype={save_dtype})")
+    if save_format == "npy":
+        out_mm = allocate_output_npy(seq_num)
+        extract_embeddings(model, dataloader, seq_num, out_npy_mm=out_mm)
+        print(f"[INFO] Saved embeddings to: {output_file} (dtype={save_dtype}, format=npy)")
+    else:
+        out_f, out_ds = allocate_output_h5(seq_num)
+        try:
+            extract_embeddings(model, dataloader, seq_num, out_h5_f=out_f, out_h5_ds=out_ds)
+            print(f"[INFO] Saved embeddings to: {output_file} (dtype={save_dtype}, format=h5, dataset='embeddings')")
+        finally:
+            out_f.close()
 
 
 if __name__ == "__main__":

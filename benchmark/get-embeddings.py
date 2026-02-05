@@ -1,6 +1,7 @@
 
 import os
 import sys
+import argparse
 import torch
 import numpy as np
 from torch.utils.data import IterableDataset, DataLoader
@@ -36,16 +37,44 @@ else:
 # -------------------------------
 # CLI arguments
 # -------------------------------
-model_dir = sys.argv[1]
-model_type = sys.argv[2]
-model_name = sys.argv[3]
-input_seq = sys.argv[4]
-output_dir = sys.argv[5]
-embedding_len = int(sys.argv[6])   # token length expected by benchmark (fixed output length)
-layer = int(sys.argv[7])           # same semantics as old code: hidden_states[layer]
+parser = argparse.ArgumentParser(
+    description="Stream embeddings to disk (.npy memmap by default; optional .h5)."
+)
+parser.add_argument("model_dir")
+parser.add_argument("model_type")
+parser.add_argument("model_name")
+parser.add_argument("input_seq")
+parser.add_argument("output_dir")
+parser.add_argument("embedding_len", type=int, help="token length expected by benchmark (fixed output length)")
+parser.add_argument("layer", type=int)
+
+parser.add_argument(
+    "--output_file",
+    default=None,
+    help="optional explicit output file path (overrides default naming).",
+)
+parser.add_argument(
+    "--save_format",
+    "--format",
+    dest="save_format",
+    choices=["npy", "h5"],
+    default="npy",
+    help="output format: npy (default) or h5.",
+)
+args = parser.parse_args()
+
+model_dir = args.model_dir
+model_type = args.model_type
+model_name = args.model_name
+input_seq = args.input_seq
+output_dir = args.output_dir
+embedding_len = int(args.embedding_len)   # token length expected by benchmark (fixed output length)
+layer = int(args.layer)                  # same semantics as old code: hidden_states[layer]
+SAVE_FORMAT = args.save_format
 
 name = os.path.basename(input_seq).split(".")[0]
-output_file = os.path.join(output_dir, f"{name}-embedding-layer_{layer}.npy")
+default_ext = ".npy" if SAVE_FORMAT == "npy" else ".h5"
+output_file = args.output_file or os.path.join(output_dir, f"{name}-embedding-layer_{layer}{default_ext}")
 
 os.makedirs(output_dir, exist_ok=True)
 
@@ -256,22 +285,129 @@ def _collate_dict(batch_list):
 
 
 # -------------------------------
-# Core: stream embeddings to disk via .npy memmap
+# Core: stream embeddings to disk (default .npy memmap; optional .h5)
 # -------------------------------
 from numpy.lib.format import open_memmap
 
+
+class OutputWriter:
+    """Write embeddings incrementally to .npy (memmap) or .h5."""
+
+    def __init__(
+        self,
+        path: str,
+        fmt: str,
+        total: int,
+        emb_len: int,
+        hidden_size: int,
+        *,
+        chunk_rows: int = 1,
+    ):
+        self.path = path
+        self.fmt = fmt
+
+        if fmt == "npy":
+            self.mm = open_memmap(path, mode="w+", dtype=np.float32, shape=(total, emb_len, hidden_size))
+            self.mm[:] = 0.0  # initialize (also ensures deterministic padding)
+            self._total = total
+            self._emb_len = emb_len
+            self._hidden_size = hidden_size
+            self.h5 = None
+            self.dset = None
+            return
+
+        if fmt == "h5":
+            try:
+                import h5py
+            except Exception as e:
+                raise RuntimeError(
+                    "Saving to .h5 requires the 'h5py' package. Install with: pip install h5py"
+                ) from e
+
+            compression = os.getenv("H5_COMPRESSION", "gzip").lower()
+            if compression in ("none", "null", "false", "0", ""):
+                compression = None
+                compression_opts = None
+                shuffle = False
+            else:
+                compression_opts = int(os.getenv("H5_COMPRESSION_LEVEL", "4"))
+                shuffle = True
+
+            chunk0 = min(max(1, int(chunk_rows)), total)
+
+            self.h5 = h5py.File(path, "w")
+            self.dset = self.h5.create_dataset(
+                "embeddings",
+                shape=(total, emb_len, hidden_size),
+                dtype="float32",
+                chunks=(chunk0, emb_len, hidden_size),
+                compression=compression,
+                compression_opts=compression_opts,
+                shuffle=shuffle,
+                fillvalue=0.0,
+            )
+
+            # Lightweight metadata (optional, but helpful)
+            self.h5.attrs["embedding_len"] = emb_len
+            self.h5.attrs["hidden_size"] = hidden_size
+            self.h5.attrs["layer"] = layer
+            self.h5.attrs["model_type"] = model_type
+            self.h5.attrs["model_name"] = model_name
+            self.h5.attrs["input_seq"] = input_seq
+
+            self.mm = None
+            self._total = total
+            self._emb_len = emb_len
+            self._hidden_size = hidden_size
+            return
+
+        raise ValueError(f"Unsupported save format: {fmt}")
+
+    def write(self, start: int, batch_arr: np.ndarray):
+        """batch_arr: float32 numpy array with shape (B, emb_len, H)."""
+        if batch_arr.dtype != np.float32:
+            batch_arr = batch_arr.astype(np.float32, copy=False)
+        bsz = batch_arr.shape[0]
+        if self.fmt == "npy":
+            self.mm[start: start + bsz, :, :] = batch_arr
+        else:
+            self.dset[start: start + bsz, :, :] = batch_arr
+
+    def flush(self):
+        if self.fmt == "npy":
+            self.mm.flush()
+        else:
+            self.h5.flush()
+
+    def close(self):
+        self.flush()
+        if self.fmt == "h5":
+            self.h5.close()
+
+
+def open_output_writer(total: int, hidden_size: int) -> OutputWriter:
+    return OutputWriter(output_file, SAVE_FORMAT, total, embedding_len, hidden_size, chunk_rows=BATCH_SIZE)
+
+
+def _pad_to_fixed(arr_2d: np.ndarray, hidden_size: int) -> np.ndarray:
+    """Pad a [L, H] array to [1, embedding_len, H] with zeros."""
+    out = np.zeros((1, embedding_len, hidden_size), dtype=np.float32)
+    if arr_2d is None:
+        return out
+    L = min(arr_2d.shape[0], embedding_len)
+    out[0, :L, :] = arr_2d[:L, :].astype(np.float32, copy=False)
+    return out
+
+
 def stream_to_memmap(total: int, hidden_size: int, dataloader, extract_fn):
     """
-    Write embeddings directly to output_file using np memmap.
-    Shape: (total, embedding_len, hidden_size)
-    """
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0  # initialize
+    Write embeddings directly to output_file.
 
+    - SAVE_FORMAT=npy (default): writes a .npy memmap (fastest).
+    - SAVE_FORMAT=h5: writes an HDF5 file with dataset key 'embeddings'.
+    """
+    writer = open_output_writer(total, hidden_size)
     idx = 0
-    autocast_ctx = (
-        torch.autocast(device_type="cuda", dtype=_autocast_dtype) if USE_AUTOCAST else torch.no_grad()
-    )
 
     # Use inference_mode for best memory behavior
     with torch.inference_mode():
@@ -287,14 +423,14 @@ def stream_to_memmap(total: int, hidden_size: int, dataloader, extract_fn):
             bsz = emb.shape[0]
 
             # emb is expected to be [B, embedding_len, H]
-            mm[idx: idx + bsz, :, :] = emb[:, :embedding_len, :]
+            writer.write(idx, emb[:, :embedding_len, :])
 
             idx += bsz
 
             # Help free GPU memory quickly
             del emb, batch
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -450,8 +586,7 @@ def run_bert_series():
     dl = DataLoader(seq_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
     total = len(seq_dataset)
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, d_model))
-    mm[:] = 0.0
+    writer = open_output_writer(total, d_model)
 
     model = load_model()
 
@@ -462,15 +597,15 @@ def run_bert_series():
                     emb = model(batch[0].to(device))[layer][:, 1:1 + embedding_len, :]
                     emb = emb.detach().float().cpu().numpy()
                     bsz = emb.shape[0]
-                    mm[i * BATCH_SIZE: i * BATCH_SIZE + bsz] = emb
+                    writer.write(i * BATCH_SIZE, emb[:bsz, :embedding_len, :])
         else:
             for i, batch in enumerate(dl):
                 emb = model(batch[0].to(device))[layer][:, 1:1 + embedding_len, :]
                 emb = emb.detach().float().cpu().numpy()
                 bsz = emb.shape[0]
-                mm[i * BATCH_SIZE: i * BATCH_SIZE + bsz] = emb
+                writer.write(i * BATCH_SIZE, emb[:bsz, :embedding_len, :])
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -482,8 +617,7 @@ def run_dnabert():
     total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0
+    writer = open_output_writer(total, hidden_size)
 
     def tokenize(seq):
         kmers = " ".join(seq[i:i + k_mers] for i in range(len(seq) - k_mers + 1))
@@ -503,10 +637,10 @@ def run_dnabert():
             # keep same slicing as old code
             temp = hs[layer][0, 1:-1, :].detach().float().cpu().numpy()
             L = min(temp.shape[0], embedding_len)
-            mm[idx, :L, :] = temp[:L, :]
+            writer.write(idx, _pad_to_fixed(temp, hidden_size))
             idx += 1
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -522,8 +656,7 @@ def run_deepgene():
     total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0
+    writer = open_output_writer(total, hidden_size)
 
     idx = 0
     with torch.inference_mode():
@@ -550,10 +683,10 @@ def run_deepgene():
             hs = outputs.hidden_states
             temp = hs[layer][0, :embedding_len, :].detach().float().cpu().numpy()
             L = min(temp.shape[0], embedding_len)
-            mm[idx, :L, :] = temp[:L, :]
+            writer.write(idx, _pad_to_fixed(temp, hidden_size))
             idx += 1
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -566,8 +699,7 @@ def run_dnabert2():
     total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0
+    writer = open_output_writer(total, hidden_size)
 
     idx = 0
     with torch.inference_mode():
@@ -585,10 +717,10 @@ def run_dnabert2():
             # old code used encoded_layers[0][0,1:-1,:]
             last = outputs[0][0, 1:-1, :].detach().float().cpu().numpy()
             L = min(last.shape[0], embedding_len)
-            mm[idx, :L, :] = last[:L, :]
+            writer.write(idx, _pad_to_fixed(last, hidden_size))
             idx += 1
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -601,8 +733,7 @@ def run_generator():
     total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0
+    writer = open_output_writer(total, hidden_size)
 
     tokenizer.padding_side = "right"
 
@@ -628,10 +759,10 @@ def run_generator():
             hs = outputs.hidden_states
             temp = hs[layer][0, 1:1 + embedding_len, :].detach().float().cpu().numpy()
             L = min(temp.shape[0], embedding_len)
-            mm[idx, :L, :] = temp[:L, :]
+            writer.write(idx, _pad_to_fixed(temp, hidden_size))
             idx += 1
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -643,8 +774,7 @@ def run_evo2():
     total = count_sequences(input_seq)
     hidden_size = 4096
 
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0
+    writer = open_output_writer(total, hidden_size)
 
     idx = 0
     with torch.inference_mode():
@@ -653,10 +783,10 @@ def run_evo2():
             outputs, embeddings = model(input_ids, return_embeddings=True, layer_names=[layer])
             temp = embeddings[layer][0, 1:1 + embedding_len, :].detach().float().cpu().numpy()
             L = min(temp.shape[0], embedding_len)
-            mm[idx, :L, :] = temp[:L, :]
+            writer.write(idx, _pad_to_fixed(temp, hidden_size))
             idx += 1
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -670,8 +800,7 @@ def run_lucaone_hf():
     total = count_sequences(input_seq)
     hidden_size = model.config.hidden_size
 
-    mm = open_memmap(output_file, mode="w+", dtype=np.float32, shape=(total, embedding_len, hidden_size))
-    mm[:] = 0.0
+    writer = open_output_writer(total, hidden_size)
 
     idx = 0
     with torch.inference_mode():
@@ -694,10 +823,10 @@ def run_lucaone_hf():
             token_emb = outputs.last_hidden_state[:, 1:-1, :]
             temp = token_emb[0, :embedding_len, :].detach().float().cpu().numpy()
             L = min(temp.shape[0], embedding_len)
-            mm[idx, :L, :] = temp[:L, :]
+            writer.write(idx, _pad_to_fixed(temp, hidden_size))
             idx += 1
 
-    mm.flush()
+    writer.close()
     return output_file
 
 
@@ -723,5 +852,5 @@ if model_type not in RUNNERS:
 
 RUNNERS[model_type]()
 
-# output already written as .npy memmap at output_file
+# output already written at output_file
 print(f"[OK] saved: {output_file}")
