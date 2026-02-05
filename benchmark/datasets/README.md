@@ -257,11 +257,13 @@ In the benchmark workflow:
 
 ### PPI / EPI (Promoter–promoter / Enhancer–promoter interaction)
 
-- `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt`: dual-input sequences.
-- For large datasets, data may be **sharded** and loaded as a **streaming dataset** during training.
+- `train/dev/test_data_0.txt` and `train/dev/test_data_1.txt`: dual-input sequences (paired inputs for each sample).
+- For large datasets, PPI/EPI data are **sharded into files of 5,000 records each** to enable streaming during training:
+  - `train_data_0-split-xxx.txt`, `train_data_1-split-xxx.txt`
+  - `dev_data_0-split-xxx.txt`, `dev_data_1-split-xxx.txt`
+  - `test_data_0-split-xxx.txt`, `test_data_1-split-xxx.txt`
 
-The script accepts `.h5` and can split into chunks (e.g., **5,000 records per shard**):
-- `script/benchmark-PPI_EPI.py`
+**Embedding extraction note:** For PPI/EPI tasks, embeddings should be saved in **`.h5`** format (rather than `.npy`) to ensure compatibility with downstream evaluation scripts (e.g., `script/benchmark-PPI_EPI.py`). The embedding extraction script supports `.h5` output and will automatically handle sharded inputs.
 
 ### TFBS / DNA accessibility / Histone modification (TFRecord pipeline)
 
@@ -280,7 +282,7 @@ wget -c https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49/GRC
 gunzip GRCh38.primary_assembly.genome.fa.gz
 mv  GRCh38.primary_assembly.genome.fa ../data
 # 1) Prepare Basset-style sequence shards
-# sh script/01_process_basset_data.sh <feature_name> <input_dir> <output_dir> <blacklist_bed> <reference_fasta>
+# sh script/01_process_basset_data.sh <feature_name> <input_dir> <output_dir> <reference_fasta>
 sh script/01_process_basset_data.sh TFBS ./TFBS ./TFBS ../data/GRCh38.primary_assembly.genome.fa
 
 # 2) Split into chunks and write index files / metadata
