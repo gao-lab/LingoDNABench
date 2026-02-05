@@ -417,7 +417,7 @@ def run_bert_series():
 
     config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
     if model_name == "RandomWeight":
-        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/RandomWeight/model_init_666.pt"
+        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/RandomWeights/model_init_666.pt"
     elif model_name == "model_M":
         model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_M/model_8_711981.pt"
     elif model_name == "model_H":
@@ -593,7 +593,7 @@ def run_dnabert2():
 
 
 def run_generator():
-    model_path = f"/lustre/grp/gglab/liangyx/data/benchmark/{model_name}"
+    model_path = f"{model_dir}/{model_name}"
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(device).eval()

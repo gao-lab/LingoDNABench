@@ -64,9 +64,10 @@ Instead, each gLM is evaluated in its own validated environment, following the o
 
 ```bash
 #download the checkpoints of BERT-Series models
-wget -r -np -nH --cut-dirs=3 -R "index.html*"  \
+wget -r -np -nH --cut-dirs=2 -R "index.html*"  \
   "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/BERT-155M-Series/"
 
+mv BERT-155M-Series ../pretrain_analysis/pretrain_application_alignment/
 ```
 
 
