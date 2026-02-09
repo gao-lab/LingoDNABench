@@ -3,7 +3,7 @@
 
 # LingoDNABench
 
-**Canonical pretraining paradigms constrain the capacity of genomic language models to decode regulatory code**
+**Conventional self-supervised pretraining paradigms constrain the capacity of genomic language models on regulatory decoding**
 
 LingoDNABench was developed to address a fundamental yet underexplored question:
 
