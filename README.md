@@ -22,7 +22,6 @@ The benchmark evaluates a diverse suite of models:
 * **Genomic Language Models (gLMs):**  Please refer to the table in `benchmark/README.md` for detailed task information.
 * **Random baselines (using the architecture defined in `pretrain_gLM/BERT`):** 
   * **RandomWeight:** Models initialized with completely random parameters.
-  * **RandomSeq:** Models pretrained using MLM on purely random nucleotide sequences 
 
 
 ### Tasks
@@ -46,7 +45,6 @@ Please refer to the table in `benchmark/datasets/README.md` for detailed task in
 ### A Mutual Information Perspective
 
 * **Different mutual information structure in genome region:** gLM show significantly different performance in predicting mask token in different genome region. (see `pretrain_analysis/mask_token_prediction`)
-
 
 ## Repository Structure
 
