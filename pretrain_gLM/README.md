@@ -33,4 +33,28 @@ RandomWeight model uses random weights to initialize the model and save <b>witho
 python RandomWeight.py \
 --model_save_path ./model/RandomWeight
 ```
+### Cehckpoints
+checkpoints are available through
+```
+wget -r -np -nH --cut-dirs=3 -R "index.html*"  \
+  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/BERT-155M-Series/"
+```
+
+The download link above is currently experiencing some accessibility issues. As a temporary alternative, the dataset can be downloaded from our FTP server:
+```
+ftp://ftp.gao-lab.org
+Username: lingodnabench_download
+Password: lingodnabench_download
+```
+
+We recommend using lftp for command-line downloading:
+```
+lftp -u lingodnabench_download,lingodnabench_download ftp://ftp.gao-lab.org \
+  -e "mirror --continue --parallel=8 LingoDNABench/BERT-155M-Series ./BERT-155M-Series; quit"
+```
+The `--continue` option allows interrupted downloads to be resumed, while `--parallel=8` enables parallel downloading.
+
+Alternatively, the FTP server can be accessed using an FTP client such as FileZilla.
+
+> Note: This FTP server is provided as a temporary download mirror. The primary download link above will remain the preferred source once its accessibility issue is resolved.
 
