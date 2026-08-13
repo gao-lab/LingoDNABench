@@ -1,4 +1,4 @@
-## Pretrain gLMs with genome sequences and random sequences
+## Pretrain gLMs with genome sequences 
 ### Prepare training data
 Download multi-species reference genomes from GenBank.
 ```bash
