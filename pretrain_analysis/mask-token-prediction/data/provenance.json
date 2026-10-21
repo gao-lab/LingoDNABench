@@ -1,0 +1,101 @@
+{
+  "reference": "GRCh38 primary assembly; chr1-chr22; reference-forward",
+  "sequence_length_bp": 200,
+  "pair_counts": {
+    "primary": 1000,
+    "conservation_matched": 1000
+  },
+  "unique_windows": 3605,
+  "annotations": "RepeatMasker rmsk.txt/hg38.fa.out; GENCODE v44; hg38 phyloP100way",
+  "matching": {
+    "gc_caliper": 0.02,
+    "conservation_phyloP_caliper": 0.1,
+    "original_conservation_pairs_retained": 902
+  },
+  "score": "Per-window mean observed-token probability conditional on native DNA-sequence output IDs, including N; complete k-mer/BPE tokens retained",
+  "source_table_sha256": {
+    "data/windows.tsv": "7b1c74e800938e1422376e97c71dde27df466ecf46fa3a1407acbe110b1f78c2",
+    "data/pairs.tsv": "16f93982b8edee8f0c6dee77aec70a1e948ef88c1fb98539158bfc2807370d77",
+    "analysis/paired_interval_scores.tsv": "b6135bd246d746cf98d4c19d92f95e11027fb25bb5ca5a9cc7fdbb7006ac664b"
+  },
+  "exported_sha256": {
+    "paired_sequences.tsv": "a2afc4b49ebbf0ae8b1aed4f534d0d2dcf631086a8ddf1ac8fa7320556667c3a",
+    "mean_predictions.tsv": "b543052b6966ef253a775c9a4cf16daf4f7d3406cff855dac2b3791520f5f167"
+  },
+  "models": [
+    {
+      "model": "RandomWeight",
+      "objective": "MLM",
+      "tokenization": "1mer",
+      "dna_output_ids": 5
+    },
+    {
+      "model": "HyenaDNA",
+      "objective": "CLM",
+      "tokenization": "1mer",
+      "dna_output_ids": 5
+    },
+    {
+      "model": "Caduceus",
+      "objective": "MLM",
+      "tokenization": "1mer",
+      "dna_output_ids": 5
+    },
+    {
+      "model": "DNABERT3mer",
+      "objective": "MLM",
+      "tokenization": "3mer-overlap",
+      "dna_output_ids": 64
+    },
+    {
+      "model": "DeepGENE",
+      "objective": "MLM",
+      "tokenization": "BPE",
+      "dna_output_ids": 4091
+    },
+    {
+      "model": "DNABERT2",
+      "objective": "MLM",
+      "tokenization": "BPE",
+      "dna_output_ids": 4091
+    },
+    {
+      "model": "OmniNA",
+      "objective": "CLM",
+      "tokenization": "BPE",
+      "dna_output_ids": 8895
+    },
+    {
+      "model": "LucaOne",
+      "objective": "MLM",
+      "tokenization": "1mer",
+      "dna_output_ids": 5
+    },
+    {
+      "model": "NT-2.5B-MS",
+      "objective": "MLM",
+      "tokenization": "6mer",
+      "dna_output_ids": 4101
+    },
+    {
+      "model": "GENERator",
+      "objective": "CLM",
+      "tokenization": "6mer",
+      "dna_output_ids": 4096
+    },
+    {
+      "model": "Evo2",
+      "objective": "CLM",
+      "tokenization": "1mer",
+      "dna_output_ids": 5
+    }
+  ],
+  "verification": {
+    "models_smoke_tested_on_gpu": 11,
+    "alu_exon_pairs_tested_per_model": 1,
+    "all_passed": true,
+    "maximum_absolute_mean_difference": 0.00006585186515026265,
+    "full_experiment_rerun": false
+  },
+  "note": "Final native-DNA-sequence-token version. Annotation/control tokens excluded. Conservation expansion and directional analysis were designed after earlier results; matching did not read model scores."
+}
