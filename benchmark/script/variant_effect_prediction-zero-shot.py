@@ -15,6 +15,11 @@ import sys
 #         return dot_product / (norm_a * norm_b)
 
 def euclidean_distance(vector_a, vector_b):
+    # Pool [positions, hidden_dim] embeddings; leave pre-pooled vectors unchanged.
+    if vector_a.ndim == 2:
+        vector_a = vector_a.mean(axis=0)
+    if vector_b.ndim == 2:
+        vector_b = vector_b.mean(axis=0)
     diff = vector_a - vector_b
     squared_diff = diff ** 2
     sum_squared_diff = np.sum(squared_diff)
