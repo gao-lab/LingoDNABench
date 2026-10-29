@@ -121,7 +121,6 @@ test_list=[os.path.join(data_dir,f"TFBS-test-data-layer_{layer}-{xx}.tfrecords")
 train_dataset = EmbeddingDataset(train_list, batch_size, data_mode="train").dataset
 valid_dataset = EmbeddingDataset(valid_list, batch_size, data_mode="valid" ).dataset
 test_dataset = EmbeddingDataset(test_list, batch_size, data_mode="test").dataset
-test_dataset=valid_dataset
 num_targets=3572
 model=Basenji_Basset(num_targets)
 model.build(input_shape=(None,embedding_len,model_dim))
