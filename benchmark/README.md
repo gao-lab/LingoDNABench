@@ -166,8 +166,50 @@ python get-embeddings.py ./models "${model_type}" "${model_name}" "${input_seq}"
 
 Batch script (for quick testing, only NT-2.5B-MS and DNABERT-2 are enabled by default in the script):
 ```bash
-sh run-get-embedding.sh ./datasets/promoter/prom_300_tata 300
+bash run-get-embedding.sh ./datasets/promoter/prom_300_tata 300
 ```
+
+### Architecture-matched random weights (match-RW)
+
+Add `--random-weights` to use the fixed random encoder with the corresponding
+model architecture and tokenizer. The released weights use initialization seed 666.
+
+Download [matched-RW checkpoints](http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/matched-RW/):
+
+```bash
+wget -r -np -nH --cut-dirs=2 -R "index.html*" \
+  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/matched-RW/"
+```
+
+Alternatively, download from the FTP mirror:
+
+```bash
+lftp -u lingodnabench_download,lingodnabench_download ftp://ftp.gao-lab.org \
+  -e "mirror --continue --parallel=8 LingoDNABench/matched-RW ./matched-RW; quit"
+```
+
+The default checkpoint directory is
+`/lustre/grp/gglab/share/liangyx_share/LingoDNABench/matched-RW`.
+Use `--random-weights-dir ./matched-RW` for a local download.
+
+```bash
+python get-embeddings.py ./models nt nucleotide-transformer-2.5b-multi-species \
+  "${input_seq}" "${out_dir}" "$((embedding_len/6+1))" -1 \
+  --random-weights --random-weights-dir ./matched-RW
+
+bash run-get-embedding.sh ./datasets/promoter/prom_300_tata 300 \
+  --random-weights --random-weights-dir ./matched-RW
+```
+
+Supported `model_type` values are `dnabert`, `dnabert2`, `nt`, `caduceus`,
+`hyenadna`, `omnina`, `deepgene`, `lucaone`, `GEN`, and `evo2`.
+Use the model's existing environment; Evo2 uses the Evo2 environment.
+For match-RW, layer `-1` selects the final representation; Evo2 uses
+`blocks.28.mlp.l3`.
+
+Outputs are saved under `${out_dir}-RW` with the usual embedding filenames.
+Use the corresponding model name with `-RW` appended in the downstream commands.
+The existing BERT-series `RandomWeight` baseline is available separately.
 
 ---
 

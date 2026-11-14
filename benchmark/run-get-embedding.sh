@@ -1,9 +1,12 @@
+#!/bin/bash
 
 #######################################
 # Global config
 #######################################
 data_dir=$1
 embedding_len=$2
+shift 2
+embedding_options=("$@")
 
 #######################################
 # Common embedding runner
@@ -24,6 +27,12 @@ run_embeddings () {
 
     for dir in $(find "$data_dir" -mindepth 0 -maxdepth 0 -type d); do
         out_dir="$dir/$model_name"
+        for option in "${embedding_options[@]}"; do
+            if [ "$option" = "--random-weights" ]; then
+                out_dir="$dir/${model_name}-RW"
+                break
+            fi
+        done
         mkdir -p "$out_dir"
 
         for file in $(find "$dir" -type f -name "*data*" | eval "$filter_cmd"); do
@@ -35,7 +44,8 @@ run_embeddings () {
                 "$file" \
                 "$out_dir" \
                 "$emb_len" \
-                "$layer"
+                "$layer" \
+                "${embedding_options[@]}"
         done
     done
 }

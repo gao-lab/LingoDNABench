@@ -22,6 +22,9 @@ The benchmark evaluates a diverse suite of models:
 * **Genomic Language Models (gLMs):**  Please refer to the table in `benchmark/README.md` for detailed task information.
 * **Random baselines (using the architecture defined in `pretrain_gLM/BERT`):** 
   * **RandomWeight:** Models initialized with completely random parameters.
+* **Architecture-matched random weights (match-RW):** Fixed random encoders for
+  ten gLM architectures, using the corresponding tokenizers. Add `--random-weights`
+  when extracting embeddings; see [benchmark instructions](benchmark/README.md#architecture-matched-random-weights-match-rw).
 
 
 ### Tasks

@@ -5,12 +5,6 @@ import argparse
 import torch
 import numpy as np
 from torch.utils.data import IterableDataset, DataLoader
-from transformers import (
-    AutoTokenizer,
-    AutoModel,
-    AutoModelForMaskedLM,
-    AutoModelForSequenceClassification,
-)
 
 # -------------------------------
 # Device & runtime knobs
@@ -47,6 +41,12 @@ parser.add_argument("input_seq")
 parser.add_argument("output_dir")
 parser.add_argument("embedding_len", type=int, help="token length expected by benchmark (fixed output length)")
 parser.add_argument("layer", type=int)
+parser.add_argument("--random-weights", action="store_true", help="Use the matched random-weight encoder.")
+parser.add_argument(
+    "--random-weights-dir",
+    default="/lustre/grp/gglab/share/liangyx_share/LingoDNABench/matched-RW",
+    help="Directory containing the matched-RW checkpoints.",
+)
 
 parser.add_argument(
     "--output_file",
@@ -63,6 +63,14 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+if args.model_type != "evo2":
+    from transformers import (
+        AutoTokenizer,
+        AutoModel,
+        AutoModelForMaskedLM,
+        AutoModelForSequenceClassification,
+    )
+
 model_dir = args.model_dir
 model_type = args.model_type
 model_name = args.model_name
@@ -76,10 +84,11 @@ name = os.path.basename(input_seq).split(".")[0]
 default_ext = ".npy" if SAVE_FORMAT == "npy" else ".h5"
 output_file = args.output_file or os.path.join(output_dir, f"{name}-embedding-layer_{layer}{default_ext}")
 
-os.makedirs(output_dir, exist_ok=True)
+if not args.random_weights:
+    os.makedirs(output_dir, exist_ok=True)
 
 # If already done, exit quickly
-if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+if not args.random_weights and os.path.exists(output_file) and os.path.getsize(output_file) > 0:
     sys.exit(0)
 
 # -------------------------------
@@ -846,6 +855,11 @@ RUNNERS = {
     "GEN": run_generator,
     "evo2": run_evo2,
 }
+
+if args.random_weights:
+    from matched_rw import run_matched_rw
+    run_matched_rw(args, iter_sequences(input_seq), count_sequences(input_seq))
+    sys.exit(0)
 
 if model_type not in RUNNERS:
     raise ValueError(f"Unsupported model_type: {model_type}")
