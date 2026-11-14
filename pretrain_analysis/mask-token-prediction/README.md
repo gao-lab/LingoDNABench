@@ -114,16 +114,6 @@ python mask-token-prediction.py --model LucaOne \
 python mask-token-prediction.py --model Evo2 \
   --checkpoint /path/to/evo2_7b.pt --output Evo2.mean_predictions.tsv
 ~~~
-
-LucaOne's checkpoint directory must contain config.json, training_args.bin and pytorch.pth;
-its code root must expose algorithms/. Use trusted checkpoints and original model implementations.
-RandomWeight requires CUDA FlashAttention. Do not assume every model runs in one Python environment.
-
 Use --cohort primary or --cohort conservation_matched for a single cohort.
 Use --limit-pairs 1 for a small test; omit it for the final results.
-The script scores each unique interval once, writes the two means per pair,
-and saves a small .meta.json with checkpoint paths, input hash and retained DNA IDs.
-Small hardware/precision differences are possible; the supplied table is the final experiment output.
-The simplified script was GPU-smoke-tested on one Alu/exon pair per model for all 11 models;
-the largest absolute difference from the supplied values was 0.000066. This was not a full rerun.
 
