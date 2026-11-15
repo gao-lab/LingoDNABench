@@ -88,7 +88,7 @@ See [model downloads/environments](../../benchmark/README.md) and the existing
 
 ~~~bash
 python mask-token-prediction.py \
-  --model DNABERT2 --checkpoint /path/to/DNABERT-2-117M \
+  --model DNABERT2 --checkpoint models/DNABERT-2-117M \
   --input data/paired_sequences.tsv --output DNABERT2.mean_predictions.tsv
 ~~~
 
@@ -97,22 +97,22 @@ NT-2.5B-MS and GENERator by changing the model name and checkpoint directory.
 
 ~~~bash
 python mask-token-prediction.py --model RandomWeight \
-  --checkpoint /path/to/RandomWeights/model_init_666.pt \
+  --checkpoint models/RandomWeights/model_init_666.pt \
   --output RandomWeight.mean_predictions.tsv --batch-size 32
 
 python mask-token-prediction.py --model DeepGENE \
-  --checkpoint /path/to/DeepGene/model/pretrain_params_epoch_20 \
-  --code-path /path/to/DeepGene/PanGeneGraphTrans \
-  --tokenizer-path /path/to/DeepGene/PanGeneGraphTrans/tokenizer.json \
+  --checkpoint models/DeepGene/model/pretrain_params_epoch_20 \
+  --code-path models/DeepGene/PanGeneGraphTrans \
+  --tokenizer-path models/DeepGene/PanGeneGraphTrans/tokenizer.json \
   --output DeepGENE.mean_predictions.tsv
 
 python mask-token-prediction.py --model LucaOne \
-  --checkpoint /path/to/LucaOne/checkpoint-directory \
-  --code-path /path/to/LucaOneApp-master --output LucaOne.mean_predictions.tsv
+  --checkpoint models/LucaOne/checkpoint-directory \
+  --code-path models/LucaOneApp-master --output LucaOne.mean_predictions.tsv
 
 # Use the separate, validated Evo2 A100-compatible environment.
 python mask-token-prediction.py --model Evo2 \
-  --checkpoint /path/to/evo2_7b.pt --output Evo2.mean_predictions.tsv
+  --checkpoint models/evo2_7b.pt --output Evo2.mean_predictions.tsv
 ~~~
 Use --cohort primary or --cohort conservation_matched for a single cohort.
 Use --limit-pairs 1 for a small test; omit it for the final results.
