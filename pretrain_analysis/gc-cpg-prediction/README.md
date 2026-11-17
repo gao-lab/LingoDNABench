@@ -18,14 +18,19 @@ python prepare_data.py --reference-fasta data/GRCh38.primary_assembly.genome.fa
 
 ## Run
 
-Run from this directory in the corresponding model environment:
+First [generate random weights with seed 666](../../benchmark/README.md#architecture-matched-random-weights-match-rw)
+from the repository's `benchmark` directory. Weights are stored in
+`benchmark/matched-RW/<model-type>/`.
+
+Then run from this directory in the corresponding model environment:
 
 ```bash
 python extract_features.py --model-type nt \
-  --checkpoint models/nucleotide-transformer-2.5b-multi-species \
+  --checkpoint ../../benchmark/models/nucleotide-transformer-2.5b-multi-species \
   --output results/nt/pretrained
 
 python extract_features.py --model-type nt --random-weights \
+  --random-weights-dir ../../benchmark/matched-RW \
   --output results/nt/random
 
 python predict.py --features results/nt/random results/nt/pretrained \
@@ -35,9 +40,8 @@ python predict.py --features results/nt/random results/nt/pretrained \
 Model types: `dnabert`, `dnabert2`, `nt`, `caduceus`, `hyenadna`, `omnina`,
 `deepgene`, `lucaone`, `GEN`, `evo2`. For Evo2, `--checkpoint` points to the `.pt` file.
 
-[Download random weights](../../benchmark/README.md#architecture-matched-random-weights-match-rw).
-Random weights default to `./matched-RW`; use `--random-weights-dir` to select
-another directory.
+Here `--random-weights-dir ../../benchmark/matched-RW` selects the generated
+weight directory. Use the same option if you store weights elsewhere.
 
 ## Results
 

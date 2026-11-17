@@ -8,13 +8,18 @@ import numpy as np
 import torch
 
 
-def load_model(kind, path, device):
+def load_model(kind, path, device, initialize=False):
     if kind != 'evo2':
-        from transformers import AutoConfig, AutoModel, AutoTokenizer, BertModel
+        from transformers import AutoConfig, AutoModel, AutoTokenizer, BertConfig, BertModel
 
     torch.manual_seed(666)
     if kind == 'dnabert':
-        model = BertModel.from_pretrained(path, local_files_only=True)
+        if initialize:
+            config = BertConfig.from_pretrained(path, local_files_only=True)
+            torch.manual_seed(666)
+            model = BertModel(config)
+        else:
+            model = BertModel.from_pretrained(path, local_files_only=True)
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
     elif kind == 'deepgene':
         sys.path.insert(0, str(path / 'code'))
@@ -23,6 +28,7 @@ def load_model(kind, path, device):
         from tokenizers import Tokenizer
 
         config = RoFormerConfig.from_pretrained(path, local_files_only=True)
+        torch.manual_seed(666)
         model = RoFormerForMaskedLM(config)
         tokenizer = Tokenizer.from_file(str(path / 'tokenizer.json'))
     elif kind == 'lucaone':
@@ -31,6 +37,7 @@ def load_model(kind, path, device):
         from algorithms.llm.lucagplm.v2_0.lucaone_gplm_config import LucaGPLMConfig
 
         config = LucaGPLMConfig.from_pretrained(path, local_files_only=True)
+        torch.manual_seed(666)
         model = LucaGPLM(config, args=SimpleNamespace(
             pretrained_model_name=None, embedding_inference=True))
         tokenizer = model.alphabet
@@ -41,12 +48,27 @@ def load_model(kind, path, device):
 
         config = dotdict(yaml.safe_load((path / 'config.yml').read_text()))
         config.use_fp8_input_projections = False
+        torch.manual_seed(666)
         torch.cuda.manual_seed_all(666)
         model = StripedHyena(config)
+        if initialize:
+            with torch.no_grad():
+                for name, parameter in model.named_parameters():
+                    if name.endswith('log_poles'):
+                        parameter.uniform_(-1.0, -0.1)
+                    elif parameter.ndim >= 2:
+                        parameter.normal_(mean=0.0, std=0.02)
+                    elif name.endswith('bias'):
+                        parameter.zero_()
+                    elif 'norm' in name.lower() or name.endswith('.scale'):
+                        parameter.fill_(1.0)
+                    else:
+                        parameter.normal_(mean=0.0, std=0.02)
         model.to_bfloat16_except_pr_lc()
         tokenizer = CharLevelTokenizer(512)
     else:
         config = AutoConfig.from_pretrained(path, trust_remote_code=True, local_files_only=True)
+        torch.manual_seed(666)
         model = AutoModel.from_config(config, trust_remote_code=True)
         if kind in ('caduceus', 'hyenadna'):
             sys.path.insert(0, str(path))
@@ -59,7 +81,7 @@ def load_model(kind, path, device):
         else:
             tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, local_files_only=True)
 
-    if kind != 'dnabert':
+    if kind != 'dnabert' and not initialize:
         state = torch.load(path / 'random-weights.pt', map_location='cpu', weights_only=True)
         model.load_state_dict(state, strict=True)
         del state

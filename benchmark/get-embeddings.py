@@ -41,10 +41,11 @@ parser.add_argument("input_seq")
 parser.add_argument("output_dir")
 parser.add_argument("embedding_len", type=int, help="token length expected by benchmark (fixed output length)")
 parser.add_argument("layer", type=int)
+parser.add_argument("--bert-checkpoint", help="Checkpoint file for a BERT-series model.")
 parser.add_argument("--random-weights", action="store_true", help="Use the matched random-weight encoder.")
 parser.add_argument(
     "--random-weights-dir",
-    default="/lustre/grp/gglab/share/liangyx_share/LingoDNABench/matched-RW",
+    default="./matched-RW",
     help="Directory containing the matched-RW checkpoints.",
 )
 
@@ -555,20 +556,24 @@ def run_omnina():
 
 def run_bert_series():
     # Your internal BERT-series code path (keep logic, but stream & memmap)
-    sys.path.append("../pretrain_gLM")
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, os.path.join(repo_dir, "pretrain_gLM"))
     from BERT.data import DNADataset, DNATokenizer
     from BERT.model import BaselineBERT
     from BERT.utils import load_config
 
-    config = load_config("../pretrain_gLM/config/Baseline_gLM.config.json")
-    if model_name == "RandomWeight":
-        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/RandomWeights/model_init_666.pt"
+    config = load_config(os.path.join(repo_dir, "pretrain_gLM/config/Baseline_gLM.config.json"))
+    series_dir = os.path.join(repo_dir, "pretrain_analysis/pretrain_application_alignment/BERT-155M-Series")
+    if args.bert_checkpoint:
+        model_checkpoint = args.bert_checkpoint
+    elif model_name == "RandomWeight":
+        model_checkpoint = os.path.join(series_dir, "RandomWeights/model_init_666.pt")
     elif model_name == "model_M":
-        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_M/model_8_711981.pt"
+        model_checkpoint = os.path.join(series_dir, "model_M/model_8_711981.pt")
     elif model_name == "model_H":
-        model_checkpoint = "../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_H/model_13_610919.pt"
+        model_checkpoint = os.path.join(series_dir, "model_H/model_18.pt")
     else:
-        raise ValueError(model_name)
+        raise ValueError("Use --bert-checkpoint for a named BERT-series checkpoint")
 
     model_config = config["model_config"]
     d_kv = model_config["d_kv"]

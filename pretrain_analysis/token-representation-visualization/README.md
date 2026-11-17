@@ -10,20 +10,25 @@ top two rows and token GC in the bottom two rows.
 
 ## Run
 
-Use each model's environment to extract representations:
+First [generate random weights with seed 666](../../benchmark/README.md#architecture-matched-random-weights-match-rw)
+from the repository's `benchmark` directory. Weights are stored in
+`benchmark/matched-RW/<model-type>/`.
+
+Then run from this directory in the corresponding model environment:
 
 ```bash
 python extract_tokens.py --model-type nt \
-  --checkpoint models/nucleotide-transformer-2.5b-multi-species \
+  --checkpoint ../../benchmark/models/nucleotide-transformer-2.5b-multi-species \
   --output results/nt/pretrained
 
 python extract_tokens.py --model-type nt --random-weights \
+  --random-weights-dir ../../benchmark/matched-RW \
   --output results/nt/random
 ```
 
 Model types and checkpoint paths follow the [GC/CpG scripts](../gc-cpg-prediction/README.md).
-Random weights default to `./matched-RW`; use `--random-weights-dir` to select
-another directory.
+Here `--random-weights-dir ../../benchmark/matched-RW` selects the generated
+weight directory. Use the same option if you store weights elsewhere.
 
 Plot with NumPy, Matplotlib, scikit-learn and umap-learn:
 

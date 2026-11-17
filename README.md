@@ -23,8 +23,9 @@ The benchmark evaluates a diverse suite of models:
 * **Random baselines (using the architecture defined in `pretrain_gLM/BERT`):** 
   * **RandomWeight:** Models initialized with completely random parameters.
 * **Architecture-matched random weights (match-RW):** Fixed random encoders for
-  ten gLM architectures, using the corresponding tokenizers. Add `--random-weights`
-  when extracting embeddings; see [benchmark instructions](benchmark/README.md#architecture-matched-random-weights-match-rw).
+  ten gLM architectures. Generate weights locally with seed 666 in
+  `benchmark/matched-RW/<model-type>/`, then extract embeddings with
+  `--random-weights`; see the [generation and benchmark workflow](benchmark/README.md#architecture-matched-random-weights-match-rw).
 
 
 ### Tasks
@@ -43,7 +44,10 @@ Please refer to the table in `benchmark/datasets/README.md` for detailed task in
 
 ### Alignment: Pretraining vs. Downstream Performance
 
-* Systematically analyze the correlation between pretraining loss trajectories and the resulting downstream task performance.(see `pretrain_analysis/pretrain_downstream_alignment`)
+Compare checkpoint-level pretraining loss with downstream performance for the
+human-genome (`model_H`) and multi-species (`model_M`) BERT-155M models, using
+the same evaluation protocol across checkpoints. See the
+[analysis workflow](pretrain_analysis/pretrain_application_alignment/README.md).
 
 ### A Mutual Information Perspective
 

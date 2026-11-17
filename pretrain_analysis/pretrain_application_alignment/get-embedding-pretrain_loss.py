@@ -1,5 +1,7 @@
 
+import argparse
 import os
+from pathlib import Path
 import sys
 import time
 import numpy as np
@@ -7,31 +9,35 @@ import torch
 from torch.utils.data import DataLoader
 
 
-def _parse_args(argv):
-    input_seq = argv[1]
-    output_dir = argv[2]
-    embedding_len = int(argv[3])
-    layer = int(argv[4])
-    epoch = int(argv[5])
+parser = argparse.ArgumentParser()
+parser.add_argument("input_seq")
+parser.add_argument("output_dir")
+parser.add_argument("embedding_len", type=int)
+parser.add_argument("layer", type=int)
+parser.add_argument("epoch", type=int, help="Zero-based checkpoint index")
+parser.add_argument("--model-family", choices=["model_H", "model_M"], default="model_M")
+parser.add_argument("--checkpoint-dir", type=Path,
+                    default=Path(__file__).resolve().parent / "BERT-155M-Series")
+parser.add_argument("--save_format", "--format", choices=["npy", "h5"], default="npy")
+args = parser.parse_args()
+input_seq = args.input_seq
+output_dir = args.output_dir
+embedding_len = args.embedding_len
+layer = args.layer
+epoch = args.epoch
+save_format = args.save_format
+if epoch < 0:
+    parser.error("epoch must be a nonnegative checkpoint index")
 
-    # default format from env
-    save_format = "npy"
-
-    # parse extra args
-    extra = argv[6:]
-    for i, tok in enumerate(extra):
-        if tok in ("--save_format", "--format"):
-            if i + 1 >= len(extra):
-                raise SystemExit(f"Error: {tok} requires a value (npy or h5).")
-            save_format = extra[i + 1].strip().lower()
-
-    if save_format not in ("npy", "h5"):
-        raise SystemExit("Error: --save_format/--format must be one of: npy, h5")
-
-    return input_seq, output_dir, embedding_len, layer, epoch, save_format
-
-
-input_seq, output_dir, embedding_len, layer, epoch, save_format = _parse_args(sys.argv)
+model_dir = args.checkpoint_dir / args.model_family
+if args.model_family == "model_H":
+    checkpoints = list(model_dir.glob(f"model_{epoch}.pt"))
+else:
+    checkpoints = list(model_dir.glob(f"model_{epoch}_*.pt"))
+if len(checkpoints) != 1:
+    raise ValueError(f"Expected one checkpoint for {args.model_family} index {epoch}: {checkpoints}")
+model_checkpoint = checkpoints[0]
+print(f"Checkpoint: {model_checkpoint}")
 
 # If True: mean over token dimension, output shape (N, d_model)
 mean_mode = False
@@ -82,15 +88,6 @@ total_seq_env = os.environ.get("TOTAL_SEQ")
 # Utility Functions
 # ============================================================
 
-def find_files_with_prefix(directory, prefix):
-    if not os.path.exists(directory):
-        raise ValueError(f"Directory {directory} does not exist")
-    return [
-        f for f in os.listdir(directory)
-        if f.startswith(prefix) and os.path.isfile(os.path.join(directory, f))
-    ]
-
-
 def count_sequences_fast(path: str) -> int:
     """Count lines in a text file without loading it into memory."""
     if total_seq_env is not None:
@@ -118,15 +115,13 @@ def get_autocast_dtype():
 # Model / Tokenizer Setup
 # ============================================================
 
-sys.path.append('../../pretrain_gLM')
+repo_dir = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(repo_dir / "pretrain_gLM"))
 from BERT.data import DNADataset, DNATokenizer
 from BERT.model import BaselineBERT
 from BERT.utils import load_config
 
-config = load_config("../../pretrain_gLM/config/Baseline_gLM.config.json")
-model_dir = "../../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_M"
-model_version = find_files_with_prefix(model_dir, f"model_{epoch}_")[0]
-model_checkpoint = os.path.join(model_dir, model_version)
+config = load_config(repo_dir / "pretrain_gLM/config/Baseline_gLM.config.json")
 
 model_config = config["model_config"]
 d_kv = model_config["d_kv"]
@@ -238,6 +233,8 @@ def allocate_output_h5(seq_num: int):
     f.attrs["input_seq"] = str(input_seq)
     f.attrs["layer"] = int(layer)
     f.attrs["epoch"] = int(epoch)
+    f.attrs["model_family"] = args.model_family
+    f.attrs["checkpoint"] = str(model_checkpoint)
     f.attrs["embedding_len"] = int(embedding_len)
     f.attrs["mean_mode"] = bool(mean_mode)
     f.attrs["save_dtype"] = str(save_dtype)

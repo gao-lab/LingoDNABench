@@ -50,7 +50,7 @@ This repository benchmarks multiple genomic language models (gLMs) by **standard
 
 ```bash
 pip install huggingface-cli==0.36.0
-sh models-download.sh ./models
+sh model-download.sh ./models
 ```
 
 ---
@@ -169,47 +169,102 @@ Batch script (for quick testing, only NT-2.5B-MS and DNABERT-2 are enabled by de
 bash run-get-embedding.sh ./datasets/promoter/prom_300_tata 300
 ```
 
+### Pretraining loss and downstream performance
+
+Evaluate the released BERT-155M checkpoints against their pretraining loss using
+the [checkpoint analysis workflow](../pretrain_analysis/pretrain_application_alignment/README.md).
+It covers `model_H` indices 0–18 and `model_M` indices 0–8, with downstream
+results stored under `<family>-<index>` model names.
+
+For the standard `bert-series` extraction entry point, `model_H` defaults to
+`model_18.pt` and `model_M` to `model_8_711981.pt`. To select another checkpoint:
+
+```bash
+python get-embeddings.py ./models bert-series model_H-0 \
+  ./datasets/promoter/prom_300_tata/dev_data_0.txt \
+  ./datasets/promoter/prom_300_tata/model_H-0 300 -1 \
+  --bert-checkpoint ../pretrain_analysis/pretrain_application_alignment/BERT-155M-Series/model_H/model_0.pt
+```
+
 ### Architecture-matched random weights (match-RW)
 
-Add `--random-weights` to use the fixed random encoder with the corresponding
-model architecture and tokenizer. The released weights use initialization seed 666.
+Users generate match-RW weights locally with seed **666**, using each model's
+configuration, tokenizer and environment. Run the commands below from the
+repository's `benchmark` directory.
 
-Download [matched-RW checkpoints](http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/matched-RW/):
+**1. Prepare the model files and generate random weights.**
+
+Use the local model directory prepared in [Download Models](#21-download-models).
+Only the configuration, tokenizer and model code are used for initialization.
+For NT:
 
 ```bash
-wget -r -np -nH --cut-dirs=2 -R "index.html*" \
-  "http://ftp.cbi.pku.edu.cn/pub/LingoDNABench/matched-RW/"
+python generate_random_weights.py --model-type nt \
+  --checkpoint ./models/nucleotide-transformer-2.5b-multi-species \
+  --output ./matched-RW
 ```
 
-Alternatively, download from the FTP mirror:
+Weights are stored under `benchmark/matched-RW/<model-type>/`, relative to the
+repository root. NT weights are saved as
+`benchmark/matched-RW/nt/random-weights.pt`.
+
+Supported `--model-type` values are `dnabert`, `dnabert2`, `nt`, `caduceus`,
+`hyenadna`, `omnina`, `deepgene`, `lucaone`, `GEN`, and `evo2`.
+Repeat generation for each model you use, with its corresponding `--checkpoint`.
+For DeepGene, also provide `--code-path` pointing to `PanGeneGraphTrans` and
+`--tokenizer-path` pointing to its `tokenizer.json`. For LucaOne, `--code-path`
+points to the LucaOneApp directory containing `algorithms`.
+Evo2 uses its installed 7B configuration:
 
 ```bash
-lftp -u lingodnabench_download,lingodnabench_download ftp://ftp.gao-lab.org \
-  -e "mirror --continue --parallel=8 LingoDNABench/matched-RW ./matched-RW; quit"
+python generate_random_weights.py --model-type evo2 --output ./matched-RW
 ```
 
-The default checkpoint directory is
-`/lustre/grp/gglab/share/liangyx_share/LingoDNABench/matched-RW`.
-Use `--random-weights-dir ./matched-RW` for a local download.
+The experiments used PyTorch 2.6.0 and Transformers 4.49.0 for non-Evo2 models.
+Evo2 uses the BF16 environment without Transformer Engine.
+
+**2. Extract embeddings using the generated weights.**
+
+Both benchmark extraction scripts read `./matched-RW` by default. For NT:
 
 ```bash
-python get-embeddings.py ./models nt nucleotide-transformer-2.5b-multi-species \
-  "${input_seq}" "${out_dir}" "$((embedding_len/6+1))" -1 \
-  --random-weights --random-weights-dir ./matched-RW
+data_dir=./datasets/promoter/prom_300_tata
+model_name=nucleotide-transformer-2.5b-multi-species
 
+for input_seq in "${data_dir}"/*data*.txt; do
+  python get-embeddings.py ./models nt "${model_name}" \
+    "${input_seq}" "${data_dir}/${model_name}" 51 -1 \
+    --random-weights --random-weights-dir ./matched-RW
+done
+```
+
+The 300 bp NT example uses 51 output token positions.
+Embeddings are saved to `${data_dir}/${model_name}-RW`.
+For match-RW, layer `-1` selects the final representation; Evo2 uses
+`blocks.28.mlp.l3`.
+
+The batch script currently enables NT and DNABERT-2. After generating weights
+for both models, run:
+
+```bash
 bash run-get-embedding.sh ./datasets/promoter/prom_300_tata 300 \
   --random-weights --random-weights-dir ./matched-RW
 ```
 
-Supported `model_type` values are `dnabert`, `dnabert2`, `nt`, `caduceus`,
-`hyenadna`, `omnina`, `deepgene`, `lucaone`, `GEN`, and `evo2`.
-Use the model's existing environment; Evo2 uses the Evo2 environment.
-For match-RW, layer `-1` selects the final representation; Evo2 uses
-`blocks.28.mlp.l3`.
+To use a different weight directory, give its root to `--output` when generating
+and `--random-weights-dir` when extracting. Each model remains in its
+`<model-type>` subdirectory.
 
-Outputs are saved under `${out_dir}-RW` with the usual embedding filenames.
-Use the corresponding model name with `-RW` appended in the downstream commands.
-The existing BERT-series `RandomWeight` baseline is available separately.
+**3. Run downstream evaluation with the `-RW` model name.**
+
+```bash
+python script/benchmark-default-applications.py \
+  nucleotide-transformer-2.5b-multi-species-RW \
+  ./datasets/promoter/prom_300_tata -1 42 1 False
+```
+
+Other tasks use the same downstream commands with `-RW` appended to the model
+name. The BERT-series `RandomWeight` baseline is available separately.
 
 ---
 
